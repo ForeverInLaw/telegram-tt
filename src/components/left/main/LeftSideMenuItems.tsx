@@ -200,17 +200,6 @@ const LeftSideMenuItems = ({
       >
         {lang('MenuSettings')}
       </MenuItem>
-      {/* Plugin-contributed entries render after the native ones, in registration order. */}
-      {getMainMenuItems().map((item, index) => (
-        <MenuItem
-          key={`plugin-main-menu-${index}`}
-          icon={item.icon}
-          destructive={item.destructive}
-          onClick={item.onClick}
-        >
-          {item.label}
-        </MenuItem>
-      ))}
       <NestedMenuItem
         icon="more"
         footer={footer}
@@ -279,6 +268,17 @@ const LeftSideMenuItems = ({
       >
         {lang('MenuMore')}
       </NestedMenuItem>
+      {/* Plugin-contributed entries render after the native ones, in registration order. */}
+      {getMainMenuItems().map((item, index) => (
+        <MenuItem
+          key={`plugin-main-menu-${index}`}
+          icon={item.icon}
+          destructive={item.destructive}
+          onClick={item.onClick}
+        >
+          {item.label}
+        </MenuItem>
+      ))}
     </>
   );
 };
