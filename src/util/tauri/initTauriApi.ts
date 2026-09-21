@@ -23,6 +23,21 @@ export default function initTauriApi() {
     return core.invoke<void>('set_window_title', { title });
   }
 
+  async function getAutostartEnabled() {
+    const core = await corePromise;
+    return core.invoke<boolean>('get_autostart_enabled');
+  }
+
+  async function setAutostartEnabled(enabled: boolean) {
+    const core = await corePromise;
+    return core.invoke<void>('set_autostart_enabled', { enabled });
+  }
+
+  async function setMenuTranslations(labels: Record<string, string>) {
+    const core = await corePromise;
+    return core.invoke<void>('set_menu_translations', { translations: labels });
+  }
+
   // @ts-expect-error
   window.tauri ??= {};
   Object.assign(window.tauri, {
@@ -30,8 +45,10 @@ export default function initTauriApi() {
     setNotificationsCount,
     openNewWindow,
     relaunch: () => import('@tauri-apps/plugin-process').then(({ relaunch }) => relaunch()),
-    checkUpdate: () => import('@tauri-apps/plugin-updater').then(({ check }) => check()),
     getCurrentWindow: () => import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow()),
     setWindowTitle,
+    getAutostartEnabled,
+    setAutostartEnabled,
+    setMenuTranslations,
   });
 }

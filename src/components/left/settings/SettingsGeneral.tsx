@@ -1,5 +1,6 @@
+import type { Event } from '@tauri-apps/api/event';
 import {
-  memo, useCallback,
+  memo, useCallback, useEffect, useRef, useState,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
@@ -9,11 +10,15 @@ import type { IRadioOption } from '../../ui/RadioGroup';
 import { SettingsScreens } from '../../../types';
 
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
+import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import {
   IS_ANDROID, IS_IOS, IS_MAC_OS,
 } from '../../../util/browser/windowEnvironment';
 import { getSystemTheme } from '../../../util/systemTheme';
+import { checkForUpdates } from '../../../util/tauri/appUpdates';
 
+import useAppUpdateState from '../../../hooks/tauri/useAppUpdateState';
+import useTauriEvent from '../../../hooks/tauri/useTauriEvent';
 import useAppLayout from '../../../hooks/useAppLayout';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
@@ -24,6 +29,7 @@ import Checkbox from '../../ui/Checkbox';
 import ListItem from '../../ui/ListItem';
 import RadioGroup from '../../ui/RadioGroup';
 import RangeSlider from '../../ui/RangeSlider';
+import Spinner from '../../ui/Spinner';
 
 type OwnProps = {
   isActive?: boolean;
@@ -51,13 +57,20 @@ const SettingsGeneral = ({
   onReset,
 }: OwnProps & StateProps) => {
   const {
-    setSharedSettingOption, openSettingsScreen,
+    setSharedSettingOption, openSettingsScreen, showNotification,
   } = getActions();
 
   const lang = useLang();
 
   const { isMobile } = useAppLayout();
   const isMobileDevice = isMobile && (IS_IOS || IS_ANDROID);
+
+  const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
+  // Marks the autostart state as user-controlled; the initial async read must not overwrite it
+  const isAutostartTouchedRef = useRef(false);
+  const appUpdateState = useAppUpdateState();
+
+  const isUpdateCheckAvailable = IS_TAURI && window.tauri?.withUpdater;
 
   const timeFormatOptions: IRadioOption[] = [{
     label: lang('SettingsTimeFormat12'),
@@ -117,6 +130,38 @@ const SettingsGeneral = ({
   const handleTextShortcutReplacementChange = useLastCallback((shouldReplace: boolean) => {
     setSharedSettingOption({ shouldReplaceTextShortcuts: shouldReplace });
   });
+
+  const handleAutostartChange = useLastCallback((isChecked: boolean) => {
+    isAutostartTouchedRef.current = true;
+    setIsAutostartEnabled(isChecked);
+    if (!IS_TAURI) return;
+
+    void window.tauri.setAutostartEnabled(isChecked).catch(() => {
+      setIsAutostartEnabled(!isChecked);
+      showNotification({ message: { key: 'ErrorUnspecified' } });
+    });
+  });
+
+  const handleAutostartChanged = useLastCallback((event: Event<boolean>) => {
+    isAutostartTouchedRef.current = true;
+    setIsAutostartEnabled(event.payload);
+  });
+
+  const handleCheckForUpdates = useLastCallback(() => {
+    checkForUpdates({ isManual: true });
+  });
+
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    void window.tauri.getAutostartEnabled().then((isEnabled) => {
+      // Ignore the stale initial read when the state was already changed by the user or another window
+      if (!isAutostartTouchedRef.current) {
+        setIsAutostartEnabled(isEnabled);
+      }
+    }).catch(() => undefined);
+  }, []);
+
+  useTauriEvent('autostart-changed', handleAutostartChanged);
 
   useHistoryBack({
     isActive,
@@ -180,6 +225,30 @@ const SettingsGeneral = ({
           onCheck={handleTextShortcutReplacementChange}
         />
       </Island>
+
+      {IS_TAURI && (
+        <>
+          <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('SettingsApp')}</IslandTitle>
+          <Island>
+            <Checkbox
+              label={lang('SettingsAutostartDesc')}
+              checked={isAutostartEnabled}
+              onCheck={handleAutostartChange}
+            />
+            {isUpdateCheckAvailable && (
+              <ListItem
+                icon="download"
+                narrow
+                disabled={appUpdateState.status !== 'idle'}
+                rightElement={appUpdateState.status === 'checking' ? <Spinner color="gray" /> : undefined}
+                onClick={handleCheckForUpdates}
+              >
+                {lang('CheckForUpdates')}
+              </ListItem>
+            )}
+          </Island>
+        </>
+      )}
     </div>
   );
 };

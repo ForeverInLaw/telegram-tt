@@ -2,16 +2,16 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
 use tauri::{
-  AppHandle, Manager, WebviewWindow,
+  AppHandle, Emitter, Manager, WebviewWindow,
   image::Image,
-  menu::{Menu, MenuItem},
+  menu::{CheckMenuItem, Menu, MenuItem},
   tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
 };
 
 #[cfg(not(target_os = "macos"))]
 mod badge;
 
-pub use crate::{AppState, BASE_URL, DEFAULT_WINDOW_TITLE, LAST_URL};
+pub use crate::{AppState, BASE_URL, DEFAULT_WINDOW_TITLE, LAST_URL, WITH_UPDATER};
 
 // Platform-specific tray icon assets
 #[cfg(target_os = "macos")]
@@ -23,17 +23,38 @@ pub(crate) static TRAY_ICON_BYTES: &[u8] = include_bytes!("../../icons/32x32.png
 pub(crate) static TRAY_BASE_ICON: LazyLock<Image<'static>> =
   LazyLock::new(|| Image::from_bytes(TRAY_ICON_BYTES).expect("Failed to load base tray icon"));
 
-// Menu constants
-pub const MENU_ITEM_QUIT_ID: &str = "quit";
-pub const MENU_ITEM_QUIT_LABEL: &str = "Quit Telegram";
+// Menu constants; ids are matched by the web-sent translations in
+// `src/util/tauri/updateTrayMenu.ts`.
 pub const MENU_ITEM_OPEN_ID: &str = "open";
 pub const MENU_ITEM_OPEN_LABEL: &str = "Open Telegram";
+pub const MENU_ITEM_AUTOSTART_ID: &str = "autostart";
+pub const MENU_ITEM_AUTOSTART_LABEL: &str = "Launch on system startup";
+pub const MENU_ITEM_CHECK_UPDATES_ID: &str = "check_updates";
+pub const MENU_ITEM_CHECK_UPDATES_LABEL: &str = "Check for updates";
+pub const MENU_ITEM_QUIT_ID: &str = "quit";
+pub const MENU_ITEM_QUIT_LABEL: &str = "Quit Telegram";
 
 static MENU_TRANSLATIONS: LazyLock<std::sync::Mutex<HashMap<String, String>>> =
   LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
 
 pub(super) static TRAY_HANDLE: LazyLock<Mutex<Option<TrayIcon>>> =
   LazyLock::new(|| Mutex::new(None));
+
+// Mirrors the current autostart state so the menu can be built with the
+// correct checked state of the autostart item.
+pub static AUTOSTART_STATE: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
+
+/// Updates the cached autostart state and rebuilds the menu, so the check item
+/// reflects reality from either trigger surface (settings or tray).
+pub fn set_tray_autostart_state(app: &AppHandle, is_enabled: bool) {
+  if let Ok(mut state) = AUTOSTART_STATE.lock() {
+    *state = is_enabled;
+  }
+
+  if let Err(err) = rebuild_menu(app) {
+    log::error!("Failed to rebuild tray menu: {:?}", err);
+  }
+}
 
 pub fn set_menu_translations(new_labels: HashMap<String, String>) {
   if let Ok(mut labels) = MENU_TRANSLATIONS.lock() {
@@ -52,28 +73,68 @@ fn translated_label(id: &str, default: &str) -> String {
   }
 }
 
+/// Builds the tray menu with the current translations and the current
+/// autostart state, and applies it to the tray icon. A no-op when the tray is
+/// not created yet (the menu is built at init instead).
+pub fn rebuild_menu(app: &AppHandle) -> tauri::Result<()> {
+  let tray = TRAY_HANDLE.lock().ok().and_then(|tray| tray.as_ref().cloned());
+  let Some(tray) = tray else {
+    return Ok(());
+  };
+
+  let open_label = translated_label(MENU_ITEM_OPEN_ID, MENU_ITEM_OPEN_LABEL);
+  let open_i = MenuItem::with_id(app, MENU_ITEM_OPEN_ID, &open_label, true, None::<&str>)?;
+
+  let is_autostart_enabled = AUTOSTART_STATE.lock().map(|is_enabled| *is_enabled).unwrap_or(false);
+  let autostart_label = translated_label(MENU_ITEM_AUTOSTART_ID, MENU_ITEM_AUTOSTART_LABEL);
+  let autostart_i = CheckMenuItem::with_id(
+    app,
+    MENU_ITEM_AUTOSTART_ID,
+    &autostart_label,
+    true,
+    is_autostart_enabled,
+    None::<&str>,
+  )?;
+
+  let quit_label = translated_label(MENU_ITEM_QUIT_ID, MENU_ITEM_QUIT_LABEL);
+  let quit_i = MenuItem::with_id(app, MENU_ITEM_QUIT_ID, &quit_label, true, None::<&str>)?;
+
+  // `WITH_UPDATER` is a compile-time constant, so one branch is eliminated here.
+  let menu = if WITH_UPDATER == "true" {
+    let check_updates_label = translated_label(
+      MENU_ITEM_CHECK_UPDATES_ID,
+      MENU_ITEM_CHECK_UPDATES_LABEL,
+    );
+    let check_updates_i = MenuItem::with_id(
+      app,
+      MENU_ITEM_CHECK_UPDATES_ID,
+      &check_updates_label,
+      true,
+      None::<&str>,
+    )?;
+    Menu::with_items(app, &[&open_i, &autostart_i, &check_updates_i, &quit_i])?
+  } else {
+    Menu::with_items(app, &[&open_i, &autostart_i, &quit_i])?
+  };
+
+  tray.set_menu(Some(menu))
+}
+
 #[derive(Default)]
 pub struct TrayManager;
 
 impl TrayManager {
   pub fn init(app: AppHandle) -> Result<Self, tauri::Error> {
-    let quit_label = translated_label(MENU_ITEM_QUIT_ID, MENU_ITEM_QUIT_LABEL);
-    let quit_i = MenuItem::with_id(&app, MENU_ITEM_QUIT_ID, &quit_label, true, None::<&str>)?;
-
-    let open_label = translated_label(MENU_ITEM_OPEN_ID, MENU_ITEM_OPEN_LABEL);
-    let open_i = MenuItem::with_id(&app, MENU_ITEM_OPEN_ID, &open_label, true, None::<&str>)?;
-
-    let menu = Menu::with_items(&app, &[&open_i, &quit_i])?;
-
     let icon = TRAY_BASE_ICON.clone();
 
     let tray_builder = TrayIconBuilder::new()
       .icon(icon)
-      .menu(&menu)
       .show_menu_on_left_click(false)
       .tooltip(DEFAULT_WINDOW_TITLE)
       .on_menu_event(|app, event| match event.id.as_ref() {
         MENU_ITEM_OPEN_ID => handle_icon_click(app, true),
+        MENU_ITEM_AUTOSTART_ID => toggle_autostart_from_tray(app),
+        MENU_ITEM_CHECK_UPDATES_ID => emit_check_updates(app),
         MENU_ITEM_QUIT_ID => app.exit(0),
         _ => {}
       })
@@ -90,7 +151,24 @@ impl TrayManager {
       *tray_lock = Some(tray_icon.clone());
     }
 
+    rebuild_menu(&app)?;
+
     Ok(Self)
+  }
+}
+
+fn toggle_autostart_from_tray(app: &AppHandle) {
+  let is_enabled = AUTOSTART_STATE.lock().map(|is_enabled| *is_enabled).unwrap_or(false);
+  if let Err(err) = crate::autostart::set_autostart_state(app, !is_enabled) {
+    log::error!("Failed to toggle autostart from tray: {:?}", err);
+  }
+}
+
+/// Asks the web side (see `src/util/tauri/appUpdates.ts`) to run a manual
+/// update check with visible feedback.
+fn emit_check_updates(app: &AppHandle) {
+  if let Err(err) = app.emit("update-check-requested", ()) {
+    log::error!("Failed to emit update-check-requested: {:?}", err);
   }
 }
 

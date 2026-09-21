@@ -6,11 +6,13 @@ use tauri::{Emitter, LogicalPosition, Manager, webview::DownloadEvent};
 use url::Url;
 use uuid::Uuid;
 
+mod autostart;
 mod deeplink;
 use deeplink::Deeplink;
 
 mod tray;
 mod window;
+use autostart::{get_autostart_enabled, set_autostart_enabled, sync_autostart_state};
 use crate::window::{WINDOW_STATES, WindowState};
 
 #[cfg(target_os = "macos")]
@@ -70,9 +72,21 @@ pub const DEFAULT_WINDOW_TITLE: &str = match std::option_env!("APP_TITLE") {
   None => "Telegram Air",
 };
 
+// Default origin for app windows: dev builds load the vite dev server, release
+// builds serve the bundled `../dist` assets over the platform tauri protocol
+// (`http://tauri.localhost` on Windows, `tauri://localhost` elsewhere).
+// The bundled frontend's own CSP meta tag (built by `buildCsp` in
+// `vite.config.ts`) is the production CSP, so `app.security.csp` stays unset.
+#[cfg(dev)]
+pub const DEFAULT_APP_URL: &str = "http://localhost:1234";
+#[cfg(all(not(dev), target_os = "windows"))]
+pub const DEFAULT_APP_URL: &str = "http://tauri.localhost";
+#[cfg(all(not(dev), not(target_os = "windows")))]
+pub const DEFAULT_APP_URL: &str = "tauri://localhost";
+
 pub const BASE_URL: &str = match std::option_env!("BASE_URL") {
   Some(url) => url,
-  None => "http://localhost:1234",
+  None => DEFAULT_APP_URL,
 };
 
 pub const WITH_UPDATER: &str = match std::option_env!("WITH_UPDATER") {
@@ -118,7 +132,14 @@ pub fn run() {
     .plugin(tauri_plugin_log::Builder::default().build())
     .plugin(tauri_plugin_window_state::Builder::default().build())
     .plugin(tauri_plugin_deep_link::init())
-    .plugin(tauri_plugin_process::init());
+    .plugin(tauri_plugin_process::init())
+    // Autostart entry is registered as "Telegram Air" (the app title) in the
+    // OS startup locations (Windows Run registry key / macOS LaunchAgent).
+    .plugin(
+      tauri_plugin_autostart::Builder::new()
+        .app_name(DEFAULT_WINDOW_TITLE)
+        .build(),
+    );
 
   let app = app.on_window_event(|window, event| match event {
     tauri::WindowEvent::CloseRequested { api, .. } => {
@@ -185,6 +206,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())?;
     }
 
+    // Sync autostart state before the tray is created, so the menu is built
+    // with the actual checked state.
+    sync_autostart_state(app.handle());
+
     crate::tray::TrayManager::init(app.handle().clone())?;
 
     Ok(())
@@ -196,7 +221,9 @@ pub fn run() {
     set_window_title,
     open_new_window_cmd,
     save_current_url,
-    set_menu_translations
+    set_menu_translations,
+    get_autostart_enabled,
+    set_autostart_enabled
   ]);
 
   app
@@ -287,8 +314,12 @@ fn set_notifications_count(
 }
 
 #[tauri::command]
-fn set_menu_translations(translations: HashMap<String, String>) {
+fn set_menu_translations(app: tauri::AppHandle, translations: HashMap<String, String>) {
   crate::tray::set_menu_translations(translations);
+
+  if let Err(err) = crate::tray::rebuild_menu(&app) {
+    log::error!("Failed to rebuild tray menu: {:?}", err);
+  }
 }
 
 #[tauri::command]
@@ -338,8 +369,9 @@ pub(crate) fn open_new_window(
   .min_inner_size(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
   .disable_drag_drop_handler() // Required for Drag & Drop on Windows
   .initialization_script(&format!(
-    "window.tauri = {{ version: '{}' }};",
-    env!("CARGO_PKG_VERSION")
+    "window.tauri = {{ version: '{}', withUpdater: {} }};",
+    env!("CARGO_PKG_VERSION"),
+    WITH_UPDATER == "true"
   ))
   .on_navigation(move |url| is_allowed_app_url(url, &base_url))
   .on_download(|window, event| {
@@ -414,5 +446,9 @@ fn resolve_app_url(url: &str, base_url: &Url) -> Option<Url> {
 }
 
 fn is_allowed_app_url(url: &Url, base_url: &Url) -> bool {
-  matches!(url.scheme(), "http" | "https") && url.origin() == base_url.origin()
+  // `Url::origin` is opaque for non-special schemes like `tauri://`, so
+  // allow-listing compares scheme, host and port instead.
+  url.scheme() == base_url.scheme()
+    && url.host() == base_url.host()
+    && url.port() == base_url.port()
 }

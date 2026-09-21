@@ -1,15 +1,17 @@
 import type { Window as TauriWindow } from '@tauri-apps/api/window';
-import type { Update } from '@tauri-apps/plugin-updater';
 
 type TauriApi = {
   version: string;
+  withUpdater: boolean;
   markTitleBarOverlay: (isOverlay: boolean, isMobile?: boolean) => Promise<void>;
   setNotificationsCount: (amount: number, isMuted?: boolean) => Promise<void>;
   openNewWindow: (url: string) => Promise<void>;
   relaunch: () => Promise<void>;
-  checkUpdate: () => Promise<Update | null>;
   getCurrentWindow: () => Promise<TauriWindow>;
   setWindowTitle: (title: string) => Promise<void>;
+  getAutostartEnabled: () => Promise<boolean>;
+  setAutostartEnabled: (enabled: boolean) => Promise<void>;
+  setMenuTranslations: (labels: Record<string, string>) => Promise<void>;
 };
 
 declare global {

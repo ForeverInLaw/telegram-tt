@@ -15,7 +15,9 @@ export default function prepareTauriConfig() {
     config.plugins = {
       updater: {
         dialog: false,
-        endpoints: [process.env.UPDATER_GIST_URL],
+        // The endpoint is the `latest.json` asset of the latest GitHub Release;
+        // the Gist URL stays as a fallback for legacy manifests.
+        endpoints: [process.env.UPDATER_ENDPOINT || process.env.UPDATER_GIST_URL],
         pubkey: process.env.UPDATER_PUBLIC_KEY,
       },
     };
