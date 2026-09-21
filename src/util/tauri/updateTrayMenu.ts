@@ -11,7 +11,11 @@ const TRAY_LABEL_KEYS: Record<string, RegularLangKey> = {
   check_updates: 'TrayMenuCheckUpdates',
 };
 
-/** Sends the localized tray menu labels to the shell; skips items not present in the current language pack. */
+/**
+ * Sends the localized tray menu labels to the shell. Items without a resolved
+ * translation are skipped; the Rust side falls back to its English defaults
+ * for those ids.
+ */
 export function updateTrayMenu() {
   if (!IS_TAURI || !window.tauri?.setMenuTranslations) return;
 
@@ -20,9 +24,8 @@ export function updateTrayMenu() {
   const labels: Record<string, string> = {};
   for (const [id, key] of Object.entries(TRAY_LABEL_KEYS)) {
     const label = lang(key);
-    // Untranslated keys resolve to the key name itself; skip the update until
-    // the fallback pack is loaded, so the shell keeps its English defaults.
-    if (label === key) return;
+    // Untranslated keys resolve to the key name itself
+    if (label === key || !label) continue;
     labels[id] = label;
   }
 
