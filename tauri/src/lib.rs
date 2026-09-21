@@ -70,9 +70,21 @@ pub const DEFAULT_WINDOW_TITLE: &str = match std::option_env!("APP_TITLE") {
   None => "Telegram Air",
 };
 
+// Default origin for app windows: dev builds load the vite dev server, release
+// builds serve the bundled `../dist` assets over the platform tauri protocol
+// (`http://tauri.localhost` on Windows, `tauri://localhost` elsewhere).
+// The bundled frontend's own CSP meta tag (built by `buildCsp` in
+// `vite.config.ts`) is the production CSP, so `app.security.csp` stays unset.
+#[cfg(dev)]
+pub const DEFAULT_APP_URL: &str = "http://localhost:1234";
+#[cfg(all(not(dev), target_os = "windows"))]
+pub const DEFAULT_APP_URL: &str = "http://tauri.localhost";
+#[cfg(all(not(dev), not(target_os = "windows")))]
+pub const DEFAULT_APP_URL: &str = "tauri://localhost";
+
 pub const BASE_URL: &str = match std::option_env!("BASE_URL") {
   Some(url) => url,
-  None => "http://localhost:1234",
+  None => DEFAULT_APP_URL,
 };
 
 pub const WITH_UPDATER: &str = match std::option_env!("WITH_UPDATER") {
@@ -414,5 +426,9 @@ fn resolve_app_url(url: &str, base_url: &Url) -> Option<Url> {
 }
 
 fn is_allowed_app_url(url: &Url, base_url: &Url) -> bool {
-  matches!(url.scheme(), "http" | "https") && url.origin() == base_url.origin()
+  // `Url::origin` is opaque for non-special schemes like `tauri://`, so
+  // allow-listing compares scheme, host and port instead.
+  url.scheme() == base_url.scheme()
+    && url.host() == base_url.host()
+    && url.port() == base_url.port()
 }
