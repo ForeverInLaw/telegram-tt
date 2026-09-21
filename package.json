@@ -155,5 +155,10 @@
     "@parcel/watcher@2.5.6": true,
     "ttf2woff2@8.0.1": true,
     "unrs-resolver@1.12.2": true
-  }
+  },
+  "trustedDependencies": [
+    "@parcel/watcher",
+    "core-js",
+    "unrs-resolver"
+  ]
 }
