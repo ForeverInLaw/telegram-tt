@@ -1,13 +1,11 @@
 import type { Event } from '@tauri-apps/api/event';
 import {
-  memo, useCallback, useEffect, useRef, useState,
+  memo, useCallback, useEffect, useState,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { SharedSettings } from '../../../global/types';
 import type { ThemeKey, TimeFormat } from '../../../types';
-import type { RegularLangKey } from '../../../types/language';
-import type { AppUpdateLastCheckResult } from '../../../util/tauri/appUpdates';
 import type { IRadioOption } from '../../ui/RadioGroup';
 import { SettingsScreens } from '../../../types';
 
@@ -18,7 +16,7 @@ import {
 } from '../../../util/browser/windowEnvironment';
 import { getSystemTheme } from '../../../util/systemTheme';
 import {
-  checkForUpdates, getAppUpdateStatus, subscribeToAppUpdates,
+  checkForUpdates, getAppUpdateState, subscribeToAppUpdates,
 } from '../../../util/tauri/appUpdates';
 
 import useTauriEvent from '../../../hooks/tauri/useTauriEvent';
@@ -49,13 +47,6 @@ type StateProps =
     'shouldUseSystemTheme'
   )>;
 
-/** Maps the outcome of a settled manual check to the notification shown to the user. */
-const MANUAL_CHECK_NOTIFICATIONS = {
-  'up-to-date': 'NoUpdatesAvailable',
-  'update-found': 'UpdateAvailableNow',
-  error: 'UpdateCheckFailed',
-} satisfies Record<AppUpdateLastCheckResult, RegularLangKey>;
-
 const SettingsGeneral = ({
   isActive,
   messageTextSize,
@@ -76,8 +67,7 @@ const SettingsGeneral = ({
   const isMobileDevice = isMobile && (IS_IOS || IS_ANDROID);
 
   const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
-  const [appUpdateState, setAppUpdateState] = useState(getAppUpdateStatus);
-  const prevUpdateStatusRef = useRef(appUpdateState.status);
+  const [appUpdateState, setAppUpdateState] = useState(getAppUpdateState);
 
   const isUpdateCheckAvailable = IS_TAURI && window.tauri?.withUpdater;
 
@@ -165,16 +155,8 @@ const SettingsGeneral = ({
 
   useTauriEvent('autostart-changed', handleAutostartChanged);
 
-  // Reports the manual check outcome when the update state settles after `checking`
   useEffect(() => (
-    subscribeToAppUpdates((newState) => {
-      const { status, lastCheckResult } = newState;
-      if (prevUpdateStatusRef.current === 'checking' && lastCheckResult) {
-        showNotification({ message: { key: MANUAL_CHECK_NOTIFICATIONS[lastCheckResult] } });
-      }
-      prevUpdateStatusRef.current = status;
-      setAppUpdateState(newState);
-    })
+    subscribeToAppUpdates(setAppUpdateState)
   ), []);
 
   useHistoryBack({

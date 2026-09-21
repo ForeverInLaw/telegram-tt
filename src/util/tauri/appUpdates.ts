@@ -1,4 +1,7 @@
 import type { Update } from '@tauri-apps/plugin-updater';
+import type { RegularLangKey } from '../../types/language';
+
+import { getActions } from '../../global';
 
 import { createCallbackManager } from '../callbacks';
 
@@ -25,6 +28,13 @@ export type AppUpdateEvent =
 const UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000;
 
 const DEFAULT_UPDATE_ERROR = 'Update failed';
+
+/** Maps the outcome of a settled manual check to the notification shown to the user. */
+const MANUAL_CHECK_NOTIFICATION_KEYS = {
+  'up-to-date': 'NoUpdatesAvailable',
+  'update-found': 'UpdateAvailableNow',
+  error: 'UpdateCheckFailed',
+} satisfies Record<AppUpdateLastCheckResult, RegularLangKey>;
 
 const INITIAL_APP_UPDATE_STATE: AppUpdateState = { status: 'idle' };
 
@@ -60,7 +70,7 @@ export function reduceAppUpdateStatus(state: AppUpdateState, event: AppUpdateEve
   }
 }
 
-export function getAppUpdateStatus() {
+export function getAppUpdateState() {
   return appUpdateState;
 }
 
@@ -128,6 +138,7 @@ async function runUpdateCheck({ isManual }: { isManual?: boolean }) {
 
     if (!update) {
       dispatchAppUpdateEvent({ type: 'no-update', isManual });
+      if (isManual) notifyManualCheckResult('up-to-date');
       return;
     }
 
@@ -141,13 +152,14 @@ async function runUpdateCheck({ isManual }: { isManual?: boolean }) {
 /** Downloads and installs the update, reporting the outcome through the state machine. */
 async function downloadUpdate(update: Update, isManual?: boolean) {
   dispatchAppUpdateEvent({ type: 'update-found', isManual });
+  if (isManual) notifyManualCheckResult('update-found');
 
   try {
     await update.downloadAndInstall();
     dispatchAppUpdateEvent({ type: 'downloaded' });
     return true;
-  } catch (e) {
-    handleUpdateError(e, isManual);
+  } catch (err) {
+    handleUpdateError(err, isManual);
     return false;
   }
 }
@@ -168,5 +180,13 @@ function handleUpdateError(err: unknown, isManual?: boolean) {
     type: 'download-failed',
     isManual,
     error: err instanceof Error ? err.message : String(err),
+  });
+  if (isManual) notifyManualCheckResult('error');
+}
+
+/** Shows the outcome of a settled manual check; silent checks never notify. */
+function notifyManualCheckResult(result: AppUpdateLastCheckResult) {
+  getActions().showNotification({
+    message: { key: MANUAL_CHECK_NOTIFICATION_KEYS[result] },
   });
 }

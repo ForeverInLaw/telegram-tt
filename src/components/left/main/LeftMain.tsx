@@ -11,7 +11,7 @@ import { selectCommunityPanelId } from '../../../global/selectors';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import {
-  getAppUpdateStatus, installUpdate, subscribeToAppUpdates,
+  getAppUpdateState, installUpdate, subscribeToAppUpdates,
 } from '../../../util/tauri/appUpdates';
 
 import useSelector from '../../../hooks/data/useSelector';
@@ -72,7 +72,7 @@ const LeftMain: FC<OwnProps> = ({
 }) => {
   const { openLeftColumnContent } = getActions();
   const [isNewChatButtonShown, setIsNewChatButtonShown] = useState(IS_TOUCH_ENV);
-  const [appUpdateState, setAppUpdateState] = useState(getAppUpdateStatus);
+  const [appUpdateState, setAppUpdateState] = useState(getAppUpdateState);
 
   const {
     shouldRenderForumPanel, handleForumPanelAnimationEnd,
