@@ -216,6 +216,17 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
             <span className="title">{lang('SessionsTitle')}</span>
             <span className="subtitle">{lang('SettingsSessionsDesc')}</span>
           </ListItem>
+
+          <ListItem
+            icon="bug"
+            iconBg="green"
+            multiline
+            narrow
+            onClick={() => openSettingsScreen({ screen: SettingsScreens.Plugins })}
+          >
+            <span className="title">{lang('SettingsPlugins')}</span>
+            <span className="subtitle">{lang('SettingsPluginsDesc')}</span>
+          </ListItem>
         </Island>
 
         <Island>

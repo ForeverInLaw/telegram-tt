@@ -143,6 +143,7 @@ import { getServerTime } from '../../util/serverTime';
 import stopEvent from '../../util/stopEvent';
 import { getUtf8Length } from '../../util/textFormat';
 import windowSize from '../../util/windowSize';
+import { getComposerButtons } from '../../plugins/registry';
 import applyIosAutoCapitalizationFix from '../middle/composer/helpers/applyIosAutoCapitalizationFix';
 import buildAttachment, {
   buildGifAttachment,
@@ -2904,6 +2905,22 @@ const Composer = ({
                   </>
                 )}
               </Transition>
+              {/* Plugin-contributed buttons render next to the native action-button
+                  cluster, in registration order. The wrapping `isInMessageList`
+                  conditional keeps them out of the story composer; scheduled-message
+                  lists still use the message-list composer and show them too. */}
+              {getComposerButtons().map((item, index) => (
+                <Button
+                  key={`plugin-composer-${index}`}
+                  round
+                  color="translucent"
+                  className="composer-action-button"
+                  ariaLabel={item.label}
+                  onClick={() => item.onClick({ chatId, threadId })}
+                >
+                  <Icon name={item.icon} />
+                </Button>
+              ))}
             </>
           )}
           {shouldRenderVoiceRecordBar && renderedRecording && (

@@ -28,6 +28,7 @@ import { IS_MULTIACCOUNT_SUPPORTED, IS_TAURI } from '../../../util/browser/globa
 import { getPromptInstall } from '../../../util/installPrompt';
 import { switchPermanentWebVersion } from '../../../util/permanentWebVersion';
 import { getSystemTheme } from '../../../util/systemTheme';
+import { getMainMenuItems } from '../../../plugins/registry';
 
 import { useFolderManagerForUnreadCounters } from '../../../hooks/useFolderManager';
 import useLang from '../../../hooks/useLang';
@@ -267,6 +268,17 @@ const LeftSideMenuItems = ({
       >
         {lang('MenuMore')}
       </NestedMenuItem>
+      {/* Plugin-contributed entries render after the native ones, in registration order. */}
+      {getMainMenuItems().map((item, index) => (
+        <MenuItem
+          key={`plugin-main-menu-${index}`}
+          icon={item.icon}
+          destructive={item.destructive}
+          onClick={item.onClick}
+        >
+          {item.label}
+        </MenuItem>
+      ))}
     </>
   );
 };

@@ -34,6 +34,7 @@ import SettingsMain from './SettingsMain';
 import SettingsNotifications from './SettingsNotifications';
 import SettingsPasskeys from './SettingsPasskeys';
 import SettingsPerformance from './SettingsPerformance';
+import SettingsPlugins from './SettingsPlugins';
 import SettingsPrivacy from './SettingsPrivacy';
 import SettingsPrivacyBlockedUsers from './SettingsPrivacyBlockedUsers';
 import SettingsPrivacyVisibility from './SettingsPrivacyVisibility';
@@ -319,6 +320,10 @@ const Settings: FC<OwnProps> = ({
       case SettingsScreens.Experimental:
         return (
           <SettingsExperimental isActive={isScreenActive} onReset={handleReset} />
+        );
+      case SettingsScreens.Plugins:
+        return (
+          <SettingsPlugins isActive={isScreenActive} onReset={handleReset} />
         );
       case SettingsScreens.GeneralChatBackground:
         return (

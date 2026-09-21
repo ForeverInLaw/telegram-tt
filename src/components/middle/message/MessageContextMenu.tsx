@@ -27,11 +27,11 @@ import {
   groupStatefulContent,
 } from '../../../global/helpers';
 import { getPeerTitle } from '../../../global/helpers/peers';
-import { getMessageContextMenuItems } from '../../../plugins/registry';
 import buildClassName from '../../../util/buildClassName';
 import { isUserId } from '../../../util/entities/ids';
 import { disableScrolling } from '../../../util/scrollLock';
 import { getServerTime } from '../../../util/serverTime';
+import { getMessageContextMenuItems } from '../../../plugins/registry';
 import { REM } from '../../common/helpers/mediaDimensions';
 import renderText from '../../common/helpers/renderText';
 import { getMessageCopyOptions } from './helpers/copyOptions';
@@ -477,9 +477,9 @@ const MessageContextMenu = ({
           </MenuItem>
         )}
         {canEdit && <MenuItem icon="edit" onClick={onEdit}>{oldLang('Edit')}</MenuItem>}
-        {getMessageContextMenuItems().map((item) => (
+        {getMessageContextMenuItems().map((item, index) => (
           <MenuItem
-            key={`plugin-${item.label}`}
+            key={`plugin-message-context-menu-${index}`}
             icon={item.icon}
             destructive={item.destructive}
             onClick={() => item.onClick(message)}
