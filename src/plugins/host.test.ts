@@ -224,6 +224,11 @@ describe('plugin host lifecycle', () => {
     expect(getPluginList().find((plugin) => plugin.name === 'hello-plugin')?.isEnabled).toBe(true);
     expect(getMessageContextMenuItems().some((item) => item.label === 'Plugin demo')).toBe(true);
 
+    // A re-init while the plugin is enabled tears the previous lifetime down
+    // before re-running `setup`, so contributions never stack.
+    initPlugins(createFakeRuntime(enabledMap).runtime);
+    expect(getMessageContextMenuItems().filter((item) => item.label === 'Plugin demo')).toHaveLength(1);
+
     // `togglePlugin` closes over the runtime set by `initPlugins`.
     togglePlugin('hello-plugin', false);
     expect(getMessageContextMenuItems().some((item) => item.label === 'Plugin demo')).toBe(false);
