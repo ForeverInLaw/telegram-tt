@@ -27,5 +27,10 @@ export function createUtilSlice(context: PluginContext, runtime: TgPluginRuntime
 
 function formatLogArg(arg: unknown): string {
   if (typeof arg === 'string') return arg;
-  return JSON.stringify(arg) ?? String(arg);
+  try {
+    return JSON.stringify(arg) ?? String(arg);
+  } catch (err) {
+    // JSON serialization throws on BigInt and cyclic values (e.g. a DOM node)
+    return String(arg);
+  }
 }

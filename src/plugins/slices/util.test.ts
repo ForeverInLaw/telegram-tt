@@ -72,6 +72,20 @@ describe('util slice', () => {
     expect(capturedLogs).toEqual(['echo-plugin: value undefined']);
   });
 
+  it('contains args JSON serialization throws on and falls back to String', () => {
+    const { util, capturedLogs } = createTestUtilSlice();
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+
+    expect(() => util.log('bigint', 10n)).not.toThrow();
+    expect(() => util.log('cyclic', cyclic)).not.toThrow();
+
+    expect(capturedLogs).toEqual([
+      'echo-plugin: bigint 10',
+      'echo-plugin: cyclic [object Object]',
+    ]);
+  });
+
   it('passes the key and variables to the translation fn', () => {
     const { util } = createTestUtilSlice();
 
