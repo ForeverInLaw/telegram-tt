@@ -27,11 +27,11 @@ import {
   groupStatefulContent,
 } from '../../../global/helpers';
 import { getPeerTitle } from '../../../global/helpers/peers';
-import { getMessageContextMenuItems } from '../../../plugins/registry';
 import buildClassName from '../../../util/buildClassName';
 import { isUserId } from '../../../util/entities/ids';
 import { disableScrolling } from '../../../util/scrollLock';
 import { getServerTime } from '../../../util/serverTime';
+import { getMessageContextMenuItems } from '../../../plugins/registry';
 import { REM } from '../../common/helpers/mediaDimensions';
 import renderText from '../../common/helpers/renderText';
 import { getMessageCopyOptions } from './helpers/copyOptions';

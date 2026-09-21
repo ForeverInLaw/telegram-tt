@@ -33,8 +33,10 @@ export interface TgPlugin {
   /** Unique plugin name, used as the registry key. */
   name: string;
   version?: string;
-  /** Called once at app startup with the plugin API. */
-  setup: (tg: TgPluginApi) => void;
+  /** Short summary shown under the plugin name in Settings. */
+  description?: string;
+  /** Called at app startup and on every re-enable with a fresh `tg` object. */
+  setup: (tg: TgPluginApi) => void | (() => void);
 }
 
 /** Convenience identity helper mirroring Vite's defineConfig convention. */

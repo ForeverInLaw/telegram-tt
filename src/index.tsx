@@ -26,16 +26,16 @@ import { onBeforeUnload } from './util/schedulers';
 import initTauriApi from './util/tauri/initTauriApi';
 import setupTauriListeners from './util/tauri/setupTauriListeners';
 import updateWebmanifest from './util/updateWebmanifest';
+import { initPlugins } from './plugins/host';
+import { createPluginRuntime } from './plugins/runtime';
 
 import App from './components/App';
 
 import './assets/fonts/roboto.css';
 import './styles/index.scss';
 
-import { initPlugins } from './plugins/host';
-
 // Plugins are loaded synchronously before the app boots.
-initPlugins();
+initPlugins(createPluginRuntime());
 
 if (STRICTERDOM_ENABLED) {
   enableStrict();

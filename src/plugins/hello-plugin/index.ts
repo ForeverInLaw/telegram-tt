@@ -8,6 +8,7 @@ import { definePlugin } from '../types';
 export default definePlugin({
   name: 'hello-plugin',
   version: '0.1.0',
+  description: 'Adds a debug item to the message context menu.',
   setup(tg) {
     tg.ui.addMessageContextMenuItem({
       icon: 'bug',
@@ -18,5 +19,10 @@ export default definePlugin({
         window.alert(`Plugin demo!\n\nmessageId: ${message.id}\nchatId: ${message.chatId}`);
       },
     });
+
+    return () => {
+      // eslint-disable-next-line no-console
+      console.log('[hello-plugin] torn down');
+    };
   },
 });
