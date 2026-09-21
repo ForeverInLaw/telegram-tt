@@ -243,8 +243,8 @@ describe('plugin host lifecycle', () => {
     initPlugins(createFakeRuntime().runtime);
 
     const helloPlugin = getPluginList().find((plugin) => plugin.name === 'hello-plugin');
-    expect(helloPlugin?.version).toBe('0.1.0');
-    expect(helloPlugin?.description).toBe('Adds a debug item to the message context menu.');
+    expect(helloPlugin?.version).toBe('0.2.0');
+    expect(helloPlugin?.description).toBe('Runnable showcase of the plugin contract — see src/plugins/README.md.');
     expect(helloPlugin?.isEnabled).toBe(true);
   });
 });
