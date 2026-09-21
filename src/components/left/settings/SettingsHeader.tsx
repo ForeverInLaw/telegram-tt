@@ -105,6 +105,8 @@ const SettingsHeader: FC<OwnProps> = ({
         return <h3>{oldLang('StickersName')}</h3>;
       case SettingsScreens.Experimental:
         return <h3>{oldLang('lng_settings_experimental')}</h3>;
+      case SettingsScreens.Plugins:
+        return <h3>{lang('SettingsPlugins')}</h3>;
 
       case SettingsScreens.GeneralChatBackground:
         return <h3>{oldLang('ChatBackground')}</h3>;

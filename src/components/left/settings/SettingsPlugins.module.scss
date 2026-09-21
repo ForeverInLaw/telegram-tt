@@ -1,0 +1,29 @@
+.info {
+  overflow: hidden;
+  margin-right: auto;
+}
+
+.name {
+  overflow: hidden;
+  display: flex;
+  gap: 0.375rem;
+  align-items: baseline;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version {
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.description {
+  overflow: hidden;
+
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

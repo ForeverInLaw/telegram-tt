@@ -502,6 +502,9 @@
 "PrivacySettings" = "Privacy and Security";
 "Language" = "Language";
 "SettingsExperimental" = "Experimental settings";
+"SettingsPlugins" = "Plugins";
+"SettingsPluginsDesc" = "Manage installed plugins";
+"SettingsPluginsAbout" = "Turn plugins on or off. Changes apply instantly without reloading.";
 "PrivacyPhone" = "Phone Number";
 "PrivacyLastSeen" = "Last Seen & Online";
 "PrivacyProfilePhoto" = "Profile Photo";

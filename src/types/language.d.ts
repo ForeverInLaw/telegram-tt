@@ -439,6 +439,9 @@ export interface LangPair {
   'PrivacySettings': undefined;
   'Language': undefined;
   'SettingsExperimental': undefined;
+  'SettingsPlugins': undefined;
+  'SettingsPluginsDesc': undefined;
+  'SettingsPluginsAbout': undefined;
   'PrivacyPhone': undefined;
   'PrivacyLastSeen': undefined;
   'PrivacyProfilePhoto': undefined;
