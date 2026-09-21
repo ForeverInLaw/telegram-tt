@@ -20,6 +20,10 @@ function createFakeRuntime(enabledMap: Record<string, boolean> = {}) {
     setPluginEnabled: (pluginName, isEnabled) => {
       enabledMap[pluginName] = isEnabled;
     },
+    // Event streams are exercised in events.test.ts; the host only needs them to exist.
+    subscribeApiUpdates: () => () => {},
+    subscribeToStoreChanges: () => () => {},
+    getActiveChatId: () => undefined,
     createPluginReporter: (pluginName) => ({
       log: () => {},
       logError: (action, error) => {

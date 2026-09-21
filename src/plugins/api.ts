@@ -1,6 +1,7 @@
 import type { PluginContext } from './context';
 import type { TgPluginApi } from './types';
 
+import { createEventsSlice } from './slices/events';
 import { createUiSlice } from './slices/ui';
 
 /**
@@ -11,5 +12,6 @@ import { createUiSlice } from './slices/ui';
 export function buildTgApi(context: PluginContext): TgPluginApi {
   return {
     ui: createUiSlice(context),
+    on: createEventsSlice(context),
   };
 }

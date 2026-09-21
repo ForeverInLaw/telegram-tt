@@ -14,6 +14,7 @@ import type { TgPlugin } from './types';
 
 import { buildTgApi } from './api';
 import { createPluginContext } from './context';
+import { disposeEventStreams, initEventStreams } from './events';
 
 /** A discovered plugin module: any folder with an `index.ts` default export. */
 type PluginModuleMap = Record<string, { default?: unknown }>;
@@ -47,6 +48,10 @@ const log = (...args: unknown[]) => console.log('%c[plugins]', 'color:#40bfc4', 
 /** Loads every discovered plugin module; called once at app startup. */
 export function initPlugins(runtime: TgPluginRuntime) {
   activeRuntime = runtime;
+  // `initEventStreams` is idempotent (it disposes previous streams first),
+  // so a re-init swaps the streams without double-delivering.
+  disposeEventStreams();
+  initEventStreams(runtime);
   loadedPlugins.clear();
   enabledPlugins.clear();
   rebuildPluginList();

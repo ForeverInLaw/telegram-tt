@@ -27,6 +27,15 @@ export interface TgPluginApi {
     /** Add an item to the message right-click context menu. */
     addMessageContextMenuItem: (item: TgMessageContextMenuItem) => void;
   };
+  /**
+   * Subscribe to an app event and receive its typed payload; returns the
+   * unsubscribe function for that one handler. Every handler a plugin
+   * registered is removed when the plugin is disabled.
+   */
+  on: <Event extends TgEventName>(
+    event: Event,
+    handler: (payload: TgEventPayloads[Event]) => void,
+  ) => () => void;
 }
 
 export interface TgPlugin {
@@ -43,3 +52,39 @@ export interface TgPlugin {
 export function definePlugin(plugin: TgPlugin): TgPlugin {
   return plugin;
 }
+
+/** Names of the app events a plugin can observe through `tg.on`. */
+export type TgEventName = 'message:new' | 'message:edited' | 'message:deleted' | 'chat:opened';
+
+/** Payload of `message:new`: a message arrived in a chat. */
+export interface TgMessageNewPayload {
+  chatId: string;
+  messageId: number;
+  message: ApiMessage;
+}
+
+/** Payload of `message:edited`: a message was edited; `message` may be partial. */
+export interface TgMessageEditedPayload {
+  chatId: string;
+  messageId: number;
+  message: Partial<ApiMessage>;
+}
+
+/** Payload of `message:deleted`: `chatId` is unknown for some chats in the source update. */
+export interface TgMessageDeletedPayload {
+  chatId: string | undefined;
+  messageIds: number[];
+}
+
+/** Payload of `chat:opened`: the active chat changed; `undefined` means the chat closed. */
+export interface TgChatOpenedPayload {
+  chatId: string | undefined;
+}
+
+/** Per-event payload types for `tg.on`. */
+export type TgEventPayloads = {
+  'message:new': TgMessageNewPayload;
+  'message:edited': TgMessageEditedPayload;
+  'message:deleted': TgMessageDeletedPayload;
+  'chat:opened': TgChatOpenedPayload;
+};

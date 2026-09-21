@@ -5,6 +5,14 @@
  * `TgPluginRuntime` interface, so tests inject fakes.
  */
 
+import { addCallback, removeCallback } from '../lib/teact/teactn';
+import { addActionHandler, getGlobal } from '../global';
+
+import type { ApiUpdate } from '../api/types';
+import type { ActionReturnType } from '../global/types';
+
+import { getCurrentTabId } from '../util/establishMultitabRole';
+
 const STORAGE_KEY = 'tt-plugins';
 const LOG_PREFIX = '%c[plugins]';
 const LOG_STYLE = 'color:#40bfc4';
@@ -25,6 +33,12 @@ export interface TgPluginRuntime {
   isPluginEnabled: (pluginName: string) => boolean;
   setPluginEnabled: (pluginName: string, isEnabled: boolean) => void;
   createPluginReporter: (pluginName: string) => TgPluginReporter;
+  /** Raw store updates from the worker-to-store pipeline; returns an unsubscribe function. */
+  subscribeApiUpdates: (listener: (update: ApiUpdate) => void) => () => void;
+  /** Notifies after every global change (throttled to tick end); returns an unsubscribe function. */
+  subscribeToStoreChanges: (listener: () => void) => () => void;
+  /** Chat id of the currently open chat; `undefined` when no chat is open. */
+  getActiveChatId: () => string | undefined;
 }
 
 function loadEnabledMap(): PluginEnabledMap {
@@ -58,7 +72,7 @@ function createReporter(pluginName: string): TgPluginReporter {
   return reporter;
 }
 
-/** Builds the production runtime backed by localStorage. */
+/** Builds the production runtime backed by localStorage and the global store. */
 export function createPluginRuntime(): TgPluginRuntime {
   return {
     isPluginEnabled: (pluginName) => loadEnabledMap()[pluginName] !== false,
@@ -73,5 +87,47 @@ export function createPluginRuntime(): TgPluginRuntime {
       }
     },
     createPluginReporter: (pluginName) => createReporter(pluginName),
+    subscribeApiUpdates: (listener) => {
+      apiUpdateListeners.add(listener);
+      return () => {
+        apiUpdateListeners.delete(listener);
+      };
+    },
+    subscribeToStoreChanges: (listener) => {
+      const notify = () => listener();
+      addCallback(notify);
+      return () => removeCallback(notify);
+    },
+    getActiveChatId: readActiveChatId,
   };
+}
+
+// --- Event stream services consumed by src/plugins/events.ts ------------------
+
+/**
+ * TeactN supports several handlers per action name but only offers
+ * registration (no removal), so the plugin layer adds exactly one
+ * `'apiUpdate'` handler here — alongside the native apiUpdaters — and fans
+ * updates out to a set it can subscribe/unsubscribe itself.
+ */
+const apiUpdateListeners = new Set<(update: ApiUpdate) => void>();
+
+addActionHandler('apiUpdate', (_global, _actions, update): ActionReturnType => {
+  for (const listener of apiUpdateListeners) {
+    listener(update);
+  }
+});
+
+/** Chat id of the currently open chat; `undefined` while no chat is open. */
+function readActiveChatId(): string | undefined {
+  const global = getGlobal();
+  // Until the `init` action the store has no tab state for this tab, so
+  // `byTabId` may be missing and the tab entry undefined; both mean "no chat".
+  const tabState = global.byTabId?.[getCurrentTabId()];
+  if (!tabState) return undefined;
+
+  // Inlined `selectCurrentMessageList` (last message list = current chat):
+  // its module tree runs `window.matchMedia` at import time, which the
+  // vitest jsdom environment does not provide.
+  return tabState.messageLists.at(-1)?.chatId;
 }
