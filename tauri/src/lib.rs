@@ -361,8 +361,9 @@ pub(crate) fn open_new_window(
   .min_inner_size(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
   .disable_drag_drop_handler() // Required for Drag & Drop on Windows
   .initialization_script(&format!(
-    "window.tauri = {{ version: '{}' }};",
-    env!("CARGO_PKG_VERSION")
+    "window.tauri = {{ version: '{}', withUpdater: {} }};",
+    env!("CARGO_PKG_VERSION"),
+    WITH_UPDATER == "true"
   ))
   .on_navigation(move |url| is_allowed_app_url(url, &base_url))
   .on_download(|window, event| {

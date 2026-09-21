@@ -23,6 +23,7 @@ import { getTranslationFn, initLocalization } from './util/localization';
 import { MULTITAB_STORAGE_KEY } from './util/multiaccount';
 import { checkAndAssignPermanentWebVersion } from './util/permanentWebVersion';
 import { onBeforeUnload } from './util/schedulers';
+import { initAppUpdates } from './util/tauri/appUpdates';
 import initTauriApi from './util/tauri/initTauriApi';
 import setupTauriListeners from './util/tauri/setupTauriListeners';
 import updateWebmanifest from './util/updateWebmanifest';
@@ -45,6 +46,7 @@ if (STRICTERDOM_ENABLED) {
 if (IS_TAURI) {
   initTauriApi();
   setupTauriListeners();
+  initAppUpdates();
 }
 
 init();
