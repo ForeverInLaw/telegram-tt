@@ -1,4 +1,3 @@
-import type { Update } from '@tauri-apps/plugin-updater';
 import type { FC } from '../../../lib/teact/teact';
 import {
   memo, useEffect, useRef, useState,
@@ -8,14 +7,14 @@ import { getActions } from '../../../global';
 import type { FolderEditDispatch } from '../../../hooks/reducers/useFoldersReducer';
 import { LeftColumnContent } from '../../../types';
 
-import { DEBUG } from '../../../config';
 import { selectCommunityPanelId } from '../../../global/selectors';
-import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import {
+  getAppUpdateStatus, installUpdate, subscribeToAppUpdates,
+} from '../../../util/tauri/appUpdates';
 
 import useSelector from '../../../hooks/data/useSelector';
-import useInterval from '../../../hooks/schedulers/useInterval';
 import useForumPanelRender from '../../../hooks/useForumPanelRender';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
@@ -52,7 +51,6 @@ type OwnProps = {
 
 const TRANSITION_RENDER_COUNT = Object.keys(LeftColumnContent).length / 2;
 const BUTTON_CLOSE_DELAY_MS = 250;
-const TAURI_CHECK_UPDATE_INTERVAL = 10 * 60 * 1000;
 
 let closeTimeout: number | undefined;
 
@@ -74,8 +72,7 @@ const LeftMain: FC<OwnProps> = ({
 }) => {
   const { openLeftColumnContent } = getActions();
   const [isNewChatButtonShown, setIsNewChatButtonShown] = useState(IS_TOUCH_ENV);
-  const [tauriUpdate, setTauriUpdate] = useState<Update>();
-  const [isTauriUpdateDownloading, setIsTauriUpdateDownloading] = useState(false);
+  const [appUpdateState, setAppUpdateState] = useState(getAppUpdateStatus);
 
   const {
     shouldRenderForumPanel, handleForumPanelAnimationEnd,
@@ -93,10 +90,13 @@ const LeftMain: FC<OwnProps> = ({
   } = useForumPanelRender(isCommunityPanelOpen);
   const isCommunityPanelRendered = isCommunityPanelOpen && content === LeftColumnContent.ChatList;
 
+  const isTauriUpdateAvailable = appUpdateState.status === 'ready'
+    || appUpdateState.status === 'downloading';
+
   const {
     shouldRender: shouldRenderUpdateButton,
     transitionClassNames: updateButtonClassNames,
-  } = useShowTransitionDeprecated(isAppUpdateAvailable || Boolean(tauriUpdate));
+  } = useShowTransitionDeprecated(isAppUpdateAvailable || isTauriUpdateAvailable);
 
   const isMouseInsideRef = useRef(false);
 
@@ -127,21 +127,11 @@ const LeftMain: FC<OwnProps> = ({
     openLeftColumnContent({ contentKey: LeftColumnContent.Contacts });
   });
 
-  const handleUpdateClick = useLastCallback(async () => {
-    if (tauriUpdate) {
-      try {
-        setIsTauriUpdateDownloading(true);
-        await tauriUpdate.downloadAndInstall();
-        setIsTauriUpdateDownloading(false);
-
-        await window.tauri?.relaunch();
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to download and install Tauri update', e);
-      } finally {
-        setIsTauriUpdateDownloading(false);
-      }
+  const handleUpdateClick = useLastCallback(() => {
+    if (isTauriUpdateAvailable) {
+      installUpdate();
     } else {
+      // Web (non-Tauri) flow: reloading picks up the update prepared by the service worker
       window.location.reload();
     }
   });
@@ -172,23 +162,9 @@ const LeftMain: FC<OwnProps> = ({
     };
   }, [content]);
 
-  const checkTauriUpdate = useLastCallback(() => {
-    window.tauri?.checkUpdate()
-      .then((update) => setTauriUpdate(update ?? undefined))
-      .catch((e) => {
-        // eslint-disable-next-line no-console
-        console.error('Tauri update check failed:', e);
-      });
-  });
-
-  useEffect(() => {
-    checkTauriUpdate();
-  }, []);
-
-  useInterval(
-    checkTauriUpdate,
-    (IS_TAURI && !DEBUG) ? TAURI_CHECK_UPDATE_INTERVAL : undefined,
-  );
+  useEffect(() => (
+    subscribeToAppUpdates(setAppUpdateState)
+  ), []);
 
   const lang = useOldLang();
 
@@ -249,7 +225,7 @@ const LeftMain: FC<OwnProps> = ({
           badge
           className={buildClassName('btn-update', updateButtonClassNames)}
           onClick={handleUpdateClick}
-          isLoading={isTauriUpdateDownloading}
+          isLoading={appUpdateState.status === 'downloading'}
         >
           {lang('lng_update_telegram')}
         </Button>
