@@ -15,7 +15,6 @@ export default defineConfig((configEnv) => mergeConfig(
         ...configDefaults.exclude,
         'tests/playwright/**',
       ],
-      setupFiles: ['./tests/init.ts'],
     },
   },
 ));
