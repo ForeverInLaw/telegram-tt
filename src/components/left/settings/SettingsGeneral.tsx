@@ -1,5 +1,6 @@
+import type { Event } from '@tauri-apps/api/event';
 import {
-  memo, useCallback,
+  memo, useCallback, useEffect, useState,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
@@ -9,11 +10,13 @@ import type { IRadioOption } from '../../ui/RadioGroup';
 import { SettingsScreens } from '../../../types';
 
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
+import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import {
   IS_ANDROID, IS_IOS, IS_MAC_OS,
 } from '../../../util/browser/windowEnvironment';
 import { getSystemTheme } from '../../../util/systemTheme';
 
+import useTauriEvent from '../../../hooks/tauri/useTauriEvent';
 import useAppLayout from '../../../hooks/useAppLayout';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
@@ -51,13 +54,15 @@ const SettingsGeneral = ({
   onReset,
 }: OwnProps & StateProps) => {
   const {
-    setSharedSettingOption, openSettingsScreen,
+    setSharedSettingOption, openSettingsScreen, showNotification,
   } = getActions();
 
   const lang = useLang();
 
   const { isMobile } = useAppLayout();
   const isMobileDevice = isMobile && (IS_IOS || IS_ANDROID);
+
+  const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
 
   const timeFormatOptions: IRadioOption[] = [{
     label: lang('SettingsTimeFormat12'),
@@ -117,6 +122,27 @@ const SettingsGeneral = ({
   const handleTextShortcutReplacementChange = useLastCallback((shouldReplace: boolean) => {
     setSharedSettingOption({ shouldReplaceTextShortcuts: shouldReplace });
   });
+
+  const handleAutostartChange = useLastCallback((isChecked: boolean) => {
+    setIsAutostartEnabled(isChecked);
+    if (!IS_TAURI) return;
+
+    void window.tauri.setAutostartEnabled(isChecked).catch(() => {
+      setIsAutostartEnabled(!isChecked);
+      showNotification({ message: { key: 'ErrorUnspecified' } });
+    });
+  });
+
+  const handleAutostartChanged = useLastCallback((event: Event<boolean>) => {
+    setIsAutostartEnabled(event.payload);
+  });
+
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    void window.tauri.getAutostartEnabled().then(setIsAutostartEnabled).catch(() => undefined);
+  }, []);
+
+  useTauriEvent('autostart-changed', handleAutostartChanged);
 
   useHistoryBack({
     isActive,
@@ -180,6 +206,19 @@ const SettingsGeneral = ({
           onCheck={handleTextShortcutReplacementChange}
         />
       </Island>
+
+      {IS_TAURI && (
+        <>
+          <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('SettingsAutostart')}</IslandTitle>
+          <Island>
+            <Checkbox
+              label={lang('SettingsAutostartDesc')}
+              checked={isAutostartEnabled}
+              onCheck={handleAutostartChange}
+            />
+          </Island>
+        </>
+      )}
     </div>
   );
 };

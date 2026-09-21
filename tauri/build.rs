@@ -7,6 +7,8 @@ fn main() {
       "open_new_window_cmd",
       "save_current_url",
       "set_menu_translations",
+      "get_autostart_enabled",
+      "set_autostart_enabled",
     ]),
   ))
   .expect("Failed to build Tauri application")

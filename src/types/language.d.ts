@@ -418,6 +418,8 @@ export interface LangPair {
   'SettingsKeyboard': undefined;
   'SettingsAutomaticTextReplacements': undefined;
   'SettingsAutomaticTextReplacementsInfo': undefined;
+  'SettingsAutostart': undefined;
+  'SettingsAutostartDesc': undefined;
   'SettingsTray': undefined;
   'SettingsOfflineNotificationUnsupported': undefined;
   'TextSize': undefined;
