@@ -14,8 +14,7 @@ export default definePlugin({
       icon: 'lamp',
       label: 'Plugin demo (chat)',
       onClick: (chat) => {
-        // eslint-disable-next-line no-console
-        console.log('[ui-demo-plugin] chat', chat.id);
+        tg.util.log('chat', chat.id);
         tg.ui.showNotification({
           title: 'ui-demo-plugin',
           message: `Triggered from the chat context menu (chatId: ${chat.id})`,
