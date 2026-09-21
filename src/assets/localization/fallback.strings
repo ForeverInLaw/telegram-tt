@@ -481,6 +481,8 @@
 "SettingsKeyboard" = "Keyboard";
 "SettingsAutomaticTextReplacements" = "Automatic text replacements";
 "SettingsAutomaticTextReplacementsInfo" = "Convert --, << and >> as you type";
+"SettingsAutostart" = "Launch on system startup";
+"SettingsAutostartDesc" = "Run Telegram Air when you log in";
 "SettingsTray" = "Show Icon in Menu Bar";
 "SettingsOfflineNotificationUnsupported" = "Not supported";
 "TextSize" = "Message Font Size";

@@ -6,11 +6,13 @@ use tauri::{Emitter, LogicalPosition, Manager, webview::DownloadEvent};
 use url::Url;
 use uuid::Uuid;
 
+mod autostart;
 mod deeplink;
 use deeplink::Deeplink;
 
 mod tray;
 mod window;
+use autostart::{get_autostart_enabled, set_autostart_enabled};
 use crate::window::{WINDOW_STATES, WindowState};
 
 #[cfg(target_os = "macos")]
@@ -130,7 +132,14 @@ pub fn run() {
     .plugin(tauri_plugin_log::Builder::default().build())
     .plugin(tauri_plugin_window_state::Builder::default().build())
     .plugin(tauri_plugin_deep_link::init())
-    .plugin(tauri_plugin_process::init());
+    .plugin(tauri_plugin_process::init())
+    // Autostart entry is registered as "Telegram Air" (the app title) in the
+    // OS startup locations (Windows Run registry key / macOS LaunchAgent).
+    .plugin(
+      tauri_plugin_autostart::Builder::new()
+        .app_name(DEFAULT_WINDOW_TITLE)
+        .build(),
+    );
 
   let app = app.on_window_event(|window, event| match event {
     tauri::WindowEvent::CloseRequested { api, .. } => {
@@ -208,7 +217,9 @@ pub fn run() {
     set_window_title,
     open_new_window_cmd,
     save_current_url,
-    set_menu_translations
+    set_menu_translations,
+    get_autostart_enabled,
+    set_autostart_enabled
   ]);
 
   app

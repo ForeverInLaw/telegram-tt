@@ -35,6 +35,16 @@ static MENU_TRANSLATIONS: LazyLock<std::sync::Mutex<HashMap<String, String>>> =
 pub(super) static TRAY_HANDLE: LazyLock<Mutex<Option<TrayIcon>>> =
   LazyLock::new(|| Mutex::new(None));
 
+// Mirrors the current autostart state so the menu can be built with the
+// correct checked state of the autostart item.
+pub static AUTOSTART_STATE: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
+
+pub fn set_tray_autostart_state(_app: &AppHandle, is_enabled: bool) {
+  if let Ok(mut state) = AUTOSTART_STATE.lock() {
+    *state = is_enabled;
+  }
+}
+
 pub fn set_menu_translations(new_labels: HashMap<String, String>) {
   if let Ok(mut labels) = MENU_TRANSLATIONS.lock() {
     *labels = new_labels;
