@@ -125,7 +125,11 @@ export interface TgMessageNewPayload {
   message: ApiMessage;
 }
 
-/** Payload of `message:edited`: a message was edited; `message` may be partial. */
+/**
+ * Payload of `message:edited`: the app updated a message's stored data — an
+ * edit, but also a reaction change, a poll vote, a web-page preview, fresh
+ * media. `message` carries only the updated fields, so treat it as partial.
+ */
 export interface TgMessageEditedPayload {
   chatId: string;
   messageId: number;

@@ -119,7 +119,7 @@ function createUpdateMessageUpdate(id: number): ApiUpdate {
     chatId: '100',
     id,
     isFull: false,
-    // The source update may carry only the edited fields.
+    // The source update carries only the updated fields, so `message` is partial.
     message: { isEdited: true },
   };
 }

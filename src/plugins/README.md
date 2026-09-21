@@ -106,7 +106,9 @@ Subscribe to app events. Returns an unsubscribe function for that one handler. H
 // Every event, with its payload shape:
 const offNew = tg.on('message:new', ({ chatId, messageId, message }) => {});
 const offEdited = tg.on('message:edited', ({ chatId, messageId, message }) => {
-  // `message` may be partial: the source update can carry only the edited fields
+  // Fires whenever the app updates a message's stored data — an edit, but
+  // also a reaction change, a poll vote, a web-page preview, fresh media.
+  // `message` carries only the updated fields, so treat it as partial
 });
 const offDeleted = tg.on('message:deleted', ({ chatId, messageIds }) => {
   // `chatId` is undefined in some source updates — always check before use

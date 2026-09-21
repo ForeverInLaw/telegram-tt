@@ -50,7 +50,7 @@ export function initEventStreams(runtime: TgPluginRuntime) {
           emitPluginEvent('message:edited', {
             chatId: update.chatId,
             messageId: update.id,
-            // The source update may carry only the edited fields.
+            // The source update carries only the updated fields, so `message` is partial.
             message: update.message,
           });
           break;
