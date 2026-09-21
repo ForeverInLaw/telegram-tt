@@ -82,7 +82,7 @@ export function loadPluginModule(pluginExport: unknown, path: string, runtime: T
     return;
   }
 
-  setupPlugin(plugin, reporter);
+  setupPlugin(plugin, reporter, runtime);
   rebuildPluginList();
 }
 
@@ -92,7 +92,7 @@ export function enablePlugin(pluginName: string, runtime: TgPluginRuntime) {
   if (!plugin) return;
 
   if (!enabledPlugins.has(pluginName)) {
-    setupPlugin(plugin, runtime.createPluginReporter(pluginName));
+    setupPlugin(plugin, runtime.createPluginReporter(pluginName), runtime);
   }
 
   runtime.setPluginEnabled(pluginName, true);
@@ -136,11 +136,11 @@ export function getPluginList(): TgPluginInfo[] {
   return pluginList;
 }
 
-function setupPlugin(plugin: TgPlugin, reporter: TgPluginReporter) {
+function setupPlugin(plugin: TgPlugin, reporter: TgPluginReporter, runtime: TgPluginRuntime) {
   if (enabledPlugins.has(plugin.name)) return;
 
   const context = createPluginContext(plugin.name, reporter);
-  const tg = buildTgApi(context);
+  const tg = buildTgApi(context, runtime);
 
   try {
     const disposer = plugin.setup(tg);
