@@ -19,13 +19,14 @@ import listenOtherClients from './util/browser/listenOtherClients';
 import { requestGlobal, subscribeToMultitabBroadcastChannel } from './util/browser/multitab';
 import { establishMultitabRole, subscribeToMasterChange } from './util/establishMultitabRole';
 import { initGlobal } from './util/init';
-import { getTranslationFn, initLocalization } from './util/localization';
+import { addLocalizationCallback, getTranslationFn, initLocalization } from './util/localization';
 import { MULTITAB_STORAGE_KEY } from './util/multiaccount';
 import { checkAndAssignPermanentWebVersion } from './util/permanentWebVersion';
 import { onBeforeUnload } from './util/schedulers';
 import { initAppUpdates } from './util/tauri/appUpdates';
 import initTauriApi from './util/tauri/initTauriApi';
 import setupTauriListeners from './util/tauri/setupTauriListeners';
+import { updateTrayMenu } from './util/tauri/updateTrayMenu';
 import updateWebmanifest from './util/updateWebmanifest';
 import { initPlugins } from './plugins/host';
 import { createPluginRuntime } from './plugins/runtime';
@@ -81,6 +82,13 @@ async function init() {
   const global = getGlobal();
 
   initLocalization(selectSharedSettings(global).language, true);
+
+  if (IS_TAURI) {
+    // Tray menu labels follow the app language (init, language change and
+    // langpack updates all run localization callbacks).
+    addLocalizationCallback(updateTrayMenu);
+    updateTrayMenu();
+  }
 
   subscribeToMasterChange((isMasterTab) => {
     getActions()

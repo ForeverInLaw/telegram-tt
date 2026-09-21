@@ -12,7 +12,7 @@ use deeplink::Deeplink;
 
 mod tray;
 mod window;
-use autostart::{get_autostart_enabled, set_autostart_enabled};
+use autostart::{get_autostart_enabled, set_autostart_enabled, sync_autostart_state};
 use crate::window::{WINDOW_STATES, WindowState};
 
 #[cfg(target_os = "macos")]
@@ -206,6 +206,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())?;
     }
 
+    // Sync autostart state before the tray is created, so the menu is built
+    // with the actual checked state.
+    sync_autostart_state(app.handle());
+
     crate::tray::TrayManager::init(app.handle().clone())?;
 
     Ok(())
@@ -310,8 +314,12 @@ fn set_notifications_count(
 }
 
 #[tauri::command]
-fn set_menu_translations(translations: HashMap<String, String>) {
+fn set_menu_translations(app: tauri::AppHandle, translations: HashMap<String, String>) {
   crate::tray::set_menu_translations(translations);
+
+  if let Err(err) = crate::tray::rebuild_menu(&app) {
+    log::error!("Failed to rebuild tray menu: {:?}", err);
+  }
 }
 
 #[tauri::command]
