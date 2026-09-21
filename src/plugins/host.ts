@@ -48,12 +48,18 @@ const log = (...args: unknown[]) => console.log('%c[plugins]', 'color:#40bfc4', 
 /** Loads every discovered plugin module; called once at app startup. */
 export function initPlugins(runtime: TgPluginRuntime) {
   activeRuntime = runtime;
+  // Re-init tears every enabled plugin's previous lifetime down exactly like
+  // `disablePlugin` does, so re-running `setup` below cannot stack menu items,
+  // composer buttons, subscriptions or disposers.
+  for (const [pluginName, enabledPlugin] of [...enabledPlugins]) {
+    enabledPlugins.delete(pluginName);
+    teardownEnabledPlugin(enabledPlugin, runtime.createPluginReporter(pluginName));
+  }
   // `initEventStreams` is idempotent (it disposes previous streams first),
   // so a re-init swaps the streams without double-delivering.
   disposeEventStreams();
   initEventStreams(runtime);
   loadedPlugins.clear();
-  enabledPlugins.clear();
   rebuildPluginList();
 
   for (const [path, pluginModule] of Object.entries(modules)) {
@@ -110,19 +116,26 @@ export function disablePlugin(pluginName: string, runtime: TgPluginRuntime) {
 
   if (enabledPlugin) {
     enabledPlugins.delete(pluginName);
-
-    const reporter = runtime.createPluginReporter(pluginName);
-    try {
-      enabledPlugin.disposer?.();
-    } catch (error) {
-      reporter.logError('disposer failed', error);
-    }
-
-    enabledPlugin.context.runTeardowns();
+    teardownEnabledPlugin(enabledPlugin, runtime.createPluginReporter(pluginName));
   }
 
   runtime.setPluginEnabled(pluginName, false);
   rebuildPluginList();
+}
+
+/**
+ * Tears one enabled lifetime down: runs the plugin's disposer, then the
+ * context teardowns that clear its registry entries and event handlers.
+ * A throwing disposer is logged and contained; the teardowns always run.
+ */
+function teardownEnabledPlugin(enabledPlugin: EnabledPlugin, reporter: TgPluginReporter) {
+  try {
+    enabledPlugin.disposer?.();
+  } catch (error) {
+    reporter.logError('disposer failed', error);
+  }
+
+  enabledPlugin.context.runTeardowns();
 }
 
 /** Runtime toggle for the Settings screen; closes over the runtime set by `initPlugins`. */
