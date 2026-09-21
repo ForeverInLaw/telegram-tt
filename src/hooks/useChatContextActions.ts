@@ -15,8 +15,13 @@ import { IS_TAURI } from '../util/browser/globalEnvironment';
 import { IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../util/browser/windowEnvironment';
 import { isUserId } from '../util/entities/ids';
 import { buildCollectionByCallback, compact } from '../util/iteratees';
+import { getChatContextMenuItems } from '../plugins/registry';
 import useSelector, { useShallowSelector } from './data/useSelector';
 import useLang from './useLang';
+
+// Chat-list context actions require an icon (MenuItemContextActionItem); plugin
+// items without one fall back to a neutral glyph.
+const PLUGIN_CHAT_ACTION_FALLBACK_ICON = 'lamp';
 
 const useChatContextActions = ({
   chat,
@@ -254,7 +259,25 @@ const useChatContextActions = ({
     isLinkedCommunityCollapsed,
   ]);
 
-  return preparedActions;
+  // Plugin-contributed items render after the native ones, in registration order.
+  // This hook is shared with search-result rows (LeftSearchResultChat), where
+  // plugin items appear as well. The registry is module-level state read fresh
+  // on every render, so it deliberately stays out of the memo deps above.
+  const pluginChatMenuItems = getChatContextMenuItems();
+
+  if (!chat || !preparedActions || pluginChatMenuItems.length === 0) {
+    return preparedActions;
+  }
+
+  const pluginSeparator: MenuItemContextAction = { isSeparator: true, key: 'plugin-chat-actions' };
+  const pluginActions: MenuItemContextAction[] = pluginChatMenuItems.map((item) => ({
+    title: item.label,
+    icon: item.icon || PLUGIN_CHAT_ACTION_FALLBACK_ICON,
+    destructive: item.destructive,
+    handler: () => item.onClick(chat),
+  }));
+
+  return [...preparedActions, pluginSeparator, ...pluginActions];
 };
 
 export default useChatContextActions;

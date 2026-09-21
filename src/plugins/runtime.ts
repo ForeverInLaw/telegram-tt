@@ -1,21 +1,22 @@
 /**
  * Composition root for the plugin layer: the ONLY module under src/plugins
- * allowed to touch environment and app services (localStorage, console).
+ * allowed to touch environment and app services (localStorage, console, actions).
  * The host and its slices receive these capabilities through the
  * `TgPluginRuntime` interface, so tests inject fakes.
  */
-
 import { addCallback, removeCallback } from '../lib/teact/teactn';
-import { addActionHandler, getGlobal } from '../global';
+import { addActionHandler, getActions, getGlobal } from '../global';
 
 import type { ApiUpdate } from '../api/types';
 import type { ActionReturnType } from '../global/types';
+import type { TgUiNotification } from './types';
 
 import { getCurrentTabId } from '../util/establishMultitabRole';
 
 const STORAGE_KEY = 'tt-plugins';
 const LOG_PREFIX = '%c[plugins]';
 const LOG_STYLE = 'color:#40bfc4';
+const PLUGIN_NOTIFICATION_LOCAL_ID_PREFIX = 'plugin-notification-';
 
 type PluginEnabledMap = Record<string, boolean>;
 
@@ -130,4 +131,21 @@ function readActiveChatId(): string | undefined {
   // its module tree runs `window.matchMedia` at import time, which the
   // vitest jsdom environment does not provide.
   return tabState.messageLists.at(-1)?.chatId;
+}
+
+// Notification calls get a fresh id so repeated ones stack instead of deduping
+// on an identical message (the action dedupes by message without a localId).
+let notificationCounter = 0;
+
+/** Shows a plugin notification through the app's own pipeline (`showNotification` action). */
+export function showPluginNotification(notification: TgUiNotification) {
+  notificationCounter += 1;
+  getActions().showNotification({
+    title: notification.title,
+    message: notification.message,
+    icon: notification.icon,
+    duration: notification.duration,
+    localId: `${PLUGIN_NOTIFICATION_LOCAL_ID_PREFIX}${notificationCounter}`,
+    tabId: getCurrentTabId(),
+  });
 }
