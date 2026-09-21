@@ -40,7 +40,6 @@ export default function initTauriApi() {
     setNotificationsCount,
     openNewWindow,
     relaunch: () => import('@tauri-apps/plugin-process').then(({ relaunch }) => relaunch()),
-    checkUpdate: () => import('@tauri-apps/plugin-updater').then(({ check }) => check()),
     getCurrentWindow: () => import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow()),
     setWindowTitle,
     getAutostartEnabled,
