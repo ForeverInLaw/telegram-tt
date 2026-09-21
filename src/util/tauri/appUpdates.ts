@@ -110,9 +110,9 @@ export function initAppUpdates() {
         checkForUpdates({ isManual: true });
       });
     })
-    .catch((e) => {
+    .catch((err) => {
       // eslint-disable-next-line no-console
-      console.error('Failed to listen for update-check-requested', e);
+      console.error('Failed to listen for update-check-requested', err);
     });
 }
 
@@ -133,8 +133,8 @@ async function runUpdateCheck({ isManual }: { isManual?: boolean }) {
 
     storedUpdate = update;
     await downloadUpdate(update, isManual);
-  } catch (e) {
-    handleUpdateError(e, isManual);
+  } catch (err) {
+    handleUpdateError(err, isManual);
   }
 }
 
@@ -155,18 +155,18 @@ async function downloadUpdate(update: Update, isManual?: boolean) {
 async function relaunchApp() {
   try {
     await window.tauri.relaunch();
-  } catch (e) {
+  } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('Failed to relaunch the app', e);
+    console.error('Failed to relaunch the app', err);
   }
 }
 
-function handleUpdateError(e: unknown, isManual?: boolean) {
+function handleUpdateError(err: unknown, isManual?: boolean) {
   // eslint-disable-next-line no-console
-  console.error('App update failed', e);
+  console.error('App update failed', err);
   dispatchAppUpdateEvent({
     type: 'download-failed',
     isManual,
-    error: e instanceof Error ? e.message : String(e),
+    error: err instanceof Error ? err.message : String(err),
   });
 }
