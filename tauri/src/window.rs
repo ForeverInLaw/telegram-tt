@@ -5,6 +5,8 @@ use std::sync::LazyLock;
 pub struct WindowState {
   pub title: String,
   pub is_overlay: bool,
+  // Only read by the macOS title bar overlay logic
+  #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
   pub is_mobile: bool,
 }
 
