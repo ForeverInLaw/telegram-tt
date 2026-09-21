@@ -19,10 +19,9 @@ import type { TgUiNotification } from './types';
 import { MAIN_THREAD_ID } from '../api/types';
 
 import { getCurrentTabId } from '../util/establishMultitabRole';
+import { LOG_PREFIX, LOG_STYLE } from './logConstants';
 
 const STORAGE_KEY = 'tt-plugins';
-const LOG_PREFIX = '%c[plugins]';
-const LOG_STYLE = 'color:#40bfc4';
 const PLUGIN_NOTIFICATION_LOCAL_ID_PREFIX = 'plugin-notification-';
 
 type PluginEnabledMap = Record<string, boolean>;
@@ -79,7 +78,7 @@ function loadEnabledMap(): PluginEnabledMap {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as PluginEnabledMap;
     return parsed || {};
-  } catch (e) {
+  } catch (err) {
     return {};
   }
 }
