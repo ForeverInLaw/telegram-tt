@@ -19,7 +19,7 @@ import listenOtherClients from './util/browser/listenOtherClients';
 import { requestGlobal, subscribeToMultitabBroadcastChannel } from './util/browser/multitab';
 import { establishMultitabRole, subscribeToMasterChange } from './util/establishMultitabRole';
 import { initGlobal } from './util/init';
-import { initLocalization } from './util/localization';
+import { getTranslationFn, initLocalization } from './util/localization';
 import { MULTITAB_STORAGE_KEY } from './util/multiaccount';
 import { checkAndAssignPermanentWebVersion } from './util/permanentWebVersion';
 import { onBeforeUnload } from './util/schedulers';
@@ -34,8 +34,9 @@ import App from './components/App';
 import './assets/fonts/roboto.css';
 import './styles/index.scss';
 
-// Plugins are loaded synchronously before the app boots.
-initPlugins(createPluginRuntime());
+// Plugins are loaded synchronously before the app boots. The translation fn is
+// injected because the plugin layer must not import its module directly.
+initPlugins(createPluginRuntime(getTranslationFn));
 
 if (STRICTERDOM_ENABLED) {
   enableStrict();

@@ -43,6 +43,16 @@ function createFakeRuntime(activeChatId?: string) {
       };
     },
     getActiveChatId: () => currentChatId,
+    // Facade services are stubbed out; the events suite never dispatches them
+    getActions: () => {
+      throw new Error('not exercised');
+    },
+    getCurrentTabId: () => 0,
+    mainThreadId: -1,
+    getActiveMessageList: () => undefined,
+    getCurrentUserId: () => undefined,
+    getChat: () => undefined,
+    getLocalizedString: (key) => key,
     createPluginReporter: (pluginName) => ({
       log: () => {},
       logError: (action, error) => {
@@ -86,7 +96,7 @@ type FakeRuntime = ReturnType<typeof createFakeRuntime>;
 /** One plugin lifetime: the context and `tg` object the host builds for it. */
 function createPluginLifetime(pluginName: string, fake: FakeRuntime): { context: PluginContext; tg: TgPluginApi } {
   const context = createPluginContext(pluginName, fake.runtime.createPluginReporter(pluginName));
-  return { context, tg: buildTgApi(context) };
+  return { context, tg: buildTgApi(context, fake.runtime) };
 }
 
 /** Minimal ApiUpdate-shaped fixtures; only the mapped fields matter to the bus. */

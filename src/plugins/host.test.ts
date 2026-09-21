@@ -23,7 +23,17 @@ function createFakeRuntime(enabledMap: Record<string, boolean> = {}) {
     // Event streams are exercised in events.test.ts; the host only needs them to exist.
     subscribeApiUpdates: () => () => {},
     subscribeToStoreChanges: () => () => {},
+    // Facade services are stubbed out; the lifecycle tests never dispatch them
+    getActions: () => {
+      throw new Error('not exercised');
+    },
+    getCurrentTabId: () => 0,
+    mainThreadId: -1,
+    getActiveMessageList: () => undefined,
     getActiveChatId: () => undefined,
+    getCurrentUserId: () => undefined,
+    getChat: () => undefined,
+    getLocalizedString: (key) => key,
     createPluginReporter: (pluginName) => ({
       log: () => {},
       logError: (action, error) => {
