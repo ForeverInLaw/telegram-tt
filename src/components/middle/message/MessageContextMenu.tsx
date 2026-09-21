@@ -477,9 +477,9 @@ const MessageContextMenu = ({
           </MenuItem>
         )}
         {canEdit && <MenuItem icon="edit" onClick={onEdit}>{oldLang('Edit')}</MenuItem>}
-        {getMessageContextMenuItems().map((item) => (
+        {getMessageContextMenuItems().map((item, index) => (
           <MenuItem
-            key={`plugin-${item.label}`}
+            key={`plugin-message-context-menu-${index}`}
             icon={item.icon}
             destructive={item.destructive}
             onClick={() => item.onClick(message)}
