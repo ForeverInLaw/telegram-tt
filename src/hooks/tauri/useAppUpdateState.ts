@@ -1,6 +1,6 @@
-import type { AppUpdateState } from '../../util/tauri/appUpdates';
-
 import { useEffect, useState } from '../../lib/teact/teact';
+
+import type { AppUpdateState } from '../../util/tauri/appUpdates';
 
 import { getAppUpdateState, subscribeToAppUpdates } from '../../util/tauri/appUpdates';
 

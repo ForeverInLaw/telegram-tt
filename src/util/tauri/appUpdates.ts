@@ -1,7 +1,7 @@
 import type { Update } from '@tauri-apps/plugin-updater';
-import type { RegularLangKey } from '../../types/language';
-
 import { getActions } from '../../global';
+
+import type { RegularLangKey } from '../../types/language';
 
 import { createCallbackManager } from '../callbacks';
 
