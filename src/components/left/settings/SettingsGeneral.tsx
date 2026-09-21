@@ -15,10 +15,9 @@ import {
   IS_ANDROID, IS_IOS, IS_MAC_OS,
 } from '../../../util/browser/windowEnvironment';
 import { getSystemTheme } from '../../../util/systemTheme';
-import {
-  checkForUpdates, getAppUpdateState, subscribeToAppUpdates,
-} from '../../../util/tauri/appUpdates';
+import { checkForUpdates } from '../../../util/tauri/appUpdates';
 
+import useAppUpdateState from '../../../hooks/tauri/useAppUpdateState';
 import useTauriEvent from '../../../hooks/tauri/useTauriEvent';
 import useAppLayout from '../../../hooks/useAppLayout';
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -67,7 +66,7 @@ const SettingsGeneral = ({
   const isMobileDevice = isMobile && (IS_IOS || IS_ANDROID);
 
   const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
-  const [appUpdateState, setAppUpdateState] = useState(getAppUpdateState);
+  const appUpdateState = useAppUpdateState();
 
   const isUpdateCheckAvailable = IS_TAURI && window.tauri?.withUpdater;
 
@@ -154,10 +153,6 @@ const SettingsGeneral = ({
   }, []);
 
   useTauriEvent('autostart-changed', handleAutostartChanged);
-
-  useEffect(() => (
-    subscribeToAppUpdates(setAppUpdateState)
-  ), []);
 
   useHistoryBack({
     isActive,

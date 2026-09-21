@@ -10,11 +10,10 @@ import { LeftColumnContent } from '../../../types';
 import { selectCommunityPanelId } from '../../../global/selectors';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
-import {
-  getAppUpdateState, installUpdate, subscribeToAppUpdates,
-} from '../../../util/tauri/appUpdates';
+import { installUpdate } from '../../../util/tauri/appUpdates';
 
 import useSelector from '../../../hooks/data/useSelector';
+import useAppUpdateState from '../../../hooks/tauri/useAppUpdateState';
 import useForumPanelRender from '../../../hooks/useForumPanelRender';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
@@ -72,7 +71,7 @@ const LeftMain: FC<OwnProps> = ({
 }) => {
   const { openLeftColumnContent } = getActions();
   const [isNewChatButtonShown, setIsNewChatButtonShown] = useState(IS_TOUCH_ENV);
-  const [appUpdateState, setAppUpdateState] = useState(getAppUpdateState);
+  const appUpdateState = useAppUpdateState();
 
   const {
     shouldRenderForumPanel, handleForumPanelAnimationEnd,
@@ -161,10 +160,6 @@ const LeftMain: FC<OwnProps> = ({
       }
     };
   }, [content]);
-
-  useEffect(() => (
-    subscribeToAppUpdates(setAppUpdateState)
-  ), []);
 
   const lang = useOldLang();
 
