@@ -596,3 +596,17 @@ PWA: Support system sharing menu
 [iOS] Startup: Add logs and signposts
 [Refactoring] Fix @typescript-eslint/await-thenable errors
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues are local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, recorded as the `Status:` line of each issue file. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
