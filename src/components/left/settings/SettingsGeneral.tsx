@@ -1,11 +1,13 @@
 import type { Event } from '@tauri-apps/api/event';
 import {
-  memo, useCallback, useEffect, useState,
+  memo, useCallback, useEffect, useRef, useState,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { SharedSettings } from '../../../global/types';
 import type { ThemeKey, TimeFormat } from '../../../types';
+import type { RegularLangKey } from '../../../types/language';
+import type { AppUpdateLastCheckResult } from '../../../util/tauri/appUpdates';
 import type { IRadioOption } from '../../ui/RadioGroup';
 import { SettingsScreens } from '../../../types';
 
@@ -15,6 +17,9 @@ import {
   IS_ANDROID, IS_IOS, IS_MAC_OS,
 } from '../../../util/browser/windowEnvironment';
 import { getSystemTheme } from '../../../util/systemTheme';
+import {
+  checkForUpdates, getAppUpdateStatus, subscribeToAppUpdates,
+} from '../../../util/tauri/appUpdates';
 
 import useTauriEvent from '../../../hooks/tauri/useTauriEvent';
 import useAppLayout from '../../../hooks/useAppLayout';
@@ -27,6 +32,7 @@ import Checkbox from '../../ui/Checkbox';
 import ListItem from '../../ui/ListItem';
 import RadioGroup from '../../ui/RadioGroup';
 import RangeSlider from '../../ui/RangeSlider';
+import Spinner from '../../ui/Spinner';
 
 type OwnProps = {
   isActive?: boolean;
@@ -42,6 +48,13 @@ type StateProps =
     'theme' |
     'shouldUseSystemTheme'
   )>;
+
+/** Maps the outcome of a settled manual check to the notification shown to the user. */
+const MANUAL_CHECK_NOTIFICATIONS = {
+  'up-to-date': 'NoUpdatesAvailable',
+  'update-found': 'UpdateAvailableNow',
+  error: 'UpdateCheckFailed',
+} satisfies Record<AppUpdateLastCheckResult, RegularLangKey>;
 
 const SettingsGeneral = ({
   isActive,
@@ -63,6 +76,10 @@ const SettingsGeneral = ({
   const isMobileDevice = isMobile && (IS_IOS || IS_ANDROID);
 
   const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
+  const [appUpdateState, setAppUpdateState] = useState(getAppUpdateStatus);
+  const prevUpdateStatusRef = useRef(appUpdateState.status);
+
+  const isUpdateCheckAvailable = IS_TAURI && window.tauri?.withUpdater;
 
   const timeFormatOptions: IRadioOption[] = [{
     label: lang('SettingsTimeFormat12'),
@@ -137,12 +154,28 @@ const SettingsGeneral = ({
     setIsAutostartEnabled(event.payload);
   });
 
+  const handleCheckForUpdates = useLastCallback(() => {
+    checkForUpdates({ isManual: true });
+  });
+
   useEffect(() => {
     if (!IS_TAURI) return;
     void window.tauri.getAutostartEnabled().then(setIsAutostartEnabled).catch(() => undefined);
   }, []);
 
   useTauriEvent('autostart-changed', handleAutostartChanged);
+
+  // Reports the manual check outcome when the update state settles after `checking`
+  useEffect(() => (
+    subscribeToAppUpdates((newState) => {
+      const { status, lastCheckResult } = newState;
+      if (prevUpdateStatusRef.current === 'checking' && lastCheckResult) {
+        showNotification({ message: { key: MANUAL_CHECK_NOTIFICATIONS[lastCheckResult] } });
+      }
+      prevUpdateStatusRef.current = status;
+      setAppUpdateState(newState);
+    })
+  ), []);
 
   useHistoryBack({
     isActive,
@@ -209,13 +242,24 @@ const SettingsGeneral = ({
 
       {IS_TAURI && (
         <>
-          <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('SettingsAutostart')}</IslandTitle>
+          <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('SettingsApp')}</IslandTitle>
           <Island>
             <Checkbox
               label={lang('SettingsAutostartDesc')}
               checked={isAutostartEnabled}
               onCheck={handleAutostartChange}
             />
+            {isUpdateCheckAvailable && (
+              <ListItem
+                icon="download"
+                narrow
+                disabled={appUpdateState.status !== 'idle'}
+                rightElement={appUpdateState.status === 'checking' ? <Spinner color="gray" /> : undefined}
+                onClick={handleCheckForUpdates}
+              >
+                {lang('CheckForUpdates')}
+              </ListItem>
+            )}
           </Island>
         </>
       )}

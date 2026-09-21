@@ -481,8 +481,12 @@
 "SettingsKeyboard" = "Keyboard";
 "SettingsAutomaticTextReplacements" = "Automatic text replacements";
 "SettingsAutomaticTextReplacementsInfo" = "Convert --, << and >> as you type";
-"SettingsAutostart" = "Launch on system startup";
+"SettingsApp" = "App";
 "SettingsAutostartDesc" = "Run Telegram Air when you log in";
+"CheckForUpdates" = "Check for updates";
+"NoUpdatesAvailable" = "You have the latest version";
+"UpdateAvailableNow" = "Update available";
+"UpdateCheckFailed" = "Failed to check for updates";
 "TrayMenuOpen" = "Open Telegram";
 "TrayMenuQuit" = "Quit Telegram";
 "TrayMenuAutostart" = "Launch on system startup";
