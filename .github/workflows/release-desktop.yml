@@ -1,0 +1,295 @@
+# Desktop shell release pipeline: a pushed `air_v*` tag (or a manual dispatch) builds
+# the Windows NSIS installer, publishes a GitHub Release in this repository and attaches
+# the updater artifacts (`*.exe.sig` signatures plus the generated `latest.json`).
+# Installed apps resolve `https://github.com/<owner>/<repo>/releases/latest/download/latest.json`
+# and auto-update from that Release. The tag must match the version in `tauri/Cargo.toml`
+# (`air_v<version>`), since the release is keyed by it.
+#
+# Required repository configuration:
+# - `secrets.UPDATER_PUBLIC_KEY` — minisign public key, embedded into the build (updater signature verification)
+# - `secrets.UPDATER_PRIVATE_KEY` — minisign private key, passed to tauri-action as `TAURI_SIGNING_PRIVATE_KEY`
+# - `secrets.UPDATER_PRIVATE_KEY_PASSWORD` — passed to tauri-action as `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+# - `secrets.TELEGRAM_API_HASH` and `vars.TELEGRAM_API_ID` — MTProto credentials required by the bundled frontend production build (`npm run build:production`)
+# - `vars.NODE_VERSION` — Node.js version for setup-node
+# No personal token is needed: tauri-action creates the Release and uploads the installer,
+# signatures and `latest.json` (generated automatically because the config override enables
+# `createUpdaterArtifacts` and the signing env vars are set) using the built-in `GITHUB_TOKEN`
+# with the job permission `contents: write`.
+
+name: Release desktop
+
+on:
+  push:
+    tags:
+      - 'air_v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows (NSIS)
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js ${{ vars.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ vars.NODE_VERSION }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache node modules
+        id: npm-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
+      - name: Install dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Extract version and tag
+        id: version
+        shell: bash
+        run: |
+          PACKAGE_VERSION=$(grep -m1 '^version' tauri/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          TAG_NAME="air_v${PACKAGE_VERSION}"
+          RELEASE_NAME="Telegram Air v${PACKAGE_VERSION}"
+          echo "package-version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+          echo "tag-name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release-name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "Extracted version: $PACKAGE_VERSION"
+          echo "Generated tag: $TAG_NAME"
+          echo "Generated release name: $RELEASE_NAME"
+
+      - name: Define Tauri configuration overrides
+        id: config-overrides
+        uses: actions/github-script@v8
+        env:
+          WITH_UPDATER: 'true'
+          UPDATER_ENDPOINT: 'https://github.com/${{ github.repository }}/releases/latest/download/latest.json'
+          UPDATER_PUBLIC_KEY: ${{ secrets.UPDATER_PUBLIC_KEY }}
+        with:
+          script: |
+            const workspacePath = process.env.GITHUB_WORKSPACE.replace(/\\/g, '/');
+            const moduleUrl = `file:///${workspacePath}/deploy/prepareTauriConfig.js`;
+            const { default: prepareTauriConfig } = await import(moduleUrl)
+            const config = prepareTauriConfig();
+
+            const configJson = JSON.stringify(config);
+            console.log(configJson);
+
+            core.setOutput("json", configJson);
+
+      - name: Build, package and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.UPDATER_PRIVATE_KEY_PASSWORD }}
+          TELEGRAM_API_ID: ${{ vars.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        with:
+          args: "-c ${{ steps.config-overrides.outputs.json }}"
+          tagName: ${{ steps.version.outputs.tag-name }}
+          releaseName: ${{ steps.version.outputs.release-name }}
+          releaseDraft: false
+          prerelease: false
+
+      - name: Verify release artifacts
+        shell: bash
+        run: |
+          BUNDLE_DIR="tauri/target/release/bundle"
+
+          echo "Artifacts found under $BUNDLE_DIR:"
+          find "$BUNDLE_DIR" -type f | sed 's/^/  /'
+
+          SETUP_EXE=$(find "$BUNDLE_DIR" -type f -name '*-setup.exe' | head -n 1)
+          SETUP_SIG=$(find "$BUNDLE_DIR" -type f -name '*-setup.exe.sig' | head -n 1)
+
+          test -f "$SETUP_EXE" || { echo "::error::NSIS installer (*-setup.exe) not found under $BUNDLE_DIR"; exit 1; }
+          test -f "$SETUP_SIG" || { echo "::error::Updater signature (*-setup.exe.sig) not found under $BUNDLE_DIR"; exit 1; }
+          test -f "latest.json" || { echo "::error::Updater manifest (latest.json) not found in the repository root"; exit 1; }
+
+          echo "✅ Verified release artifacts:"
+          echo "  installer: $SETUP_EXE"
+          echo "  signature: $SETUP_SIG"
+          echo "  manifest:  latest.json"
+
+      - name: Upload artifacts for debugging
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-release-artifacts
+          path: |
+            tauri/target/release/bundle/nsis/
+            latest.json
+
+  # Disabled until public release — see spec (Linux AppImage and macOS follow-up; macOS unsigned first).
+  # Enabling a job is a one-line flip: remove its `if: false`.
+  build-linux:
+    name: Build Linux (AppImage)
+    if: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js ${{ vars.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ vars.NODE_VERSION }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Cache node modules
+        id: npm-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
+      - name: Install dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Extract version and tag
+        id: version
+        run: |
+          PACKAGE_VERSION=$(grep -m1 '^version' tauri/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          TAG_NAME="air_v${PACKAGE_VERSION}"
+          RELEASE_NAME="Telegram Air v${PACKAGE_VERSION}"
+          echo "package-version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+          echo "tag-name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release-name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Define Tauri configuration overrides
+        id: config-overrides
+        uses: actions/github-script@v8
+        env:
+          WITH_UPDATER: 'true'
+          UPDATER_ENDPOINT: 'https://github.com/${{ github.repository }}/releases/latest/download/latest.json'
+          UPDATER_PUBLIC_KEY: ${{ secrets.UPDATER_PUBLIC_KEY }}
+        with:
+          script: |
+            const workspacePath = process.env.GITHUB_WORKSPACE.replace(/\\/g, '/');
+            const moduleUrl = `file:///${workspacePath}/deploy/prepareTauriConfig.js`;
+            const { default: prepareTauriConfig } = await import(moduleUrl)
+            const config = prepareTauriConfig();
+
+            const configJson = JSON.stringify(config);
+            console.log(configJson);
+
+            core.setOutput("json", configJson);
+
+      - name: Build, package and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.UPDATER_PRIVATE_KEY_PASSWORD }}
+          TELEGRAM_API_ID: ${{ vars.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        with:
+          args: "-c ${{ steps.config-overrides.outputs.json }}"
+          tagName: ${{ steps.version.outputs.tag-name }}
+          releaseName: ${{ steps.version.outputs.release-name }}
+          releaseDraft: false
+          prerelease: false
+
+  build-macos:
+    name: Build macOS (unsigned)
+    if: false
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set Xcode version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Setup Node.js ${{ vars.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ vars.NODE_VERSION }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache node modules
+        id: npm-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-
+
+      - name: Install dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Extract version and tag
+        id: version
+        run: |
+          PACKAGE_VERSION=$(grep -m1 '^version' tauri/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          TAG_NAME="air_v${PACKAGE_VERSION}"
+          RELEASE_NAME="Telegram Air v${PACKAGE_VERSION}"
+          echo "package-version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+          echo "tag-name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release-name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Define Tauri configuration overrides
+        id: config-overrides
+        uses: actions/github-script@v8
+        env:
+          WITH_UPDATER: 'true'
+          UPDATER_ENDPOINT: 'https://github.com/${{ github.repository }}/releases/latest/download/latest.json'
+          UPDATER_PUBLIC_KEY: ${{ secrets.UPDATER_PUBLIC_KEY }}
+        with:
+          script: |
+            const workspacePath = process.env.GITHUB_WORKSPACE.replace(/\\/g, '/');
+            const moduleUrl = `file:///${workspacePath}/deploy/prepareTauriConfig.js`;
+            const { default: prepareTauriConfig } = await import(moduleUrl)
+            const config = prepareTauriConfig();
+
+            const configJson = JSON.stringify(config);
+            console.log(configJson);
+
+            core.setOutput("json", configJson);
+
+      - name: Build, package and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.UPDATER_PRIVATE_KEY_PASSWORD }}
+          TELEGRAM_API_ID: ${{ vars.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        with:
+          args: "-c ${{ steps.config-overrides.outputs.json }}"
+          tagName: ${{ steps.version.outputs.tag-name }}
+          releaseName: ${{ steps.version.outputs.release-name }}
+          releaseDraft: false
+          prerelease: false

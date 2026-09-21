@@ -12,3 +12,4 @@ dev/perf/screenshot*
 .scratch
 .github/workflows/*
 !.github/workflows/package-and-publish.yml
+!.github/workflows/release-desktop.yml
