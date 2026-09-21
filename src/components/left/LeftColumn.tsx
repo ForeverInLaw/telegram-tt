@@ -194,6 +194,7 @@ function LeftColumn({
         case SettingsScreens.Language:
         case SettingsScreens.Stickers:
         case SettingsScreens.Experimental:
+        case SettingsScreens.Plugins:
           openSettingsScreen({ screen: SettingsScreens.Main });
           return;
 
