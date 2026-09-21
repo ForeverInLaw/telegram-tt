@@ -1,4 +1,5 @@
 import type { PluginContext } from '../context';
+import type { TgPluginRuntime } from '../runtime';
 import type {
   TgChatContextMenuItem, TgComposerButton, TgMainMenuItem, TgMessageContextMenuItem, TgPluginApi,
   TgUiNotification,
@@ -8,15 +9,15 @@ import {
   clearChatContextMenuItems, clearComposerButtons, clearMainMenuItems, clearMessageContextMenuItems,
   registerChatContextMenuItem, registerComposerButton, registerMainMenuItem, registerMessageContextMenuItem,
 } from '../registry';
-import { showPluginNotification } from '../runtime';
 
 /**
  * UI-contributions slice. Every method registers a declarative descriptor in
  * its surface registry (plugins never touch UI primitives), wraps plugin
  * callbacks so a throw is contained and logged, and schedules the registry
  * cleanup through `onTeardown` so disabling the plugin clears every surface.
+ * Environment services arrive through the runtime, like in every other slice.
  */
-export function createUiSlice(context: PluginContext): TgPluginApi['ui'] {
+export function createUiSlice(context: PluginContext, runtime: TgPluginRuntime): TgPluginApi['ui'] {
   const { pluginName, wrap, onTeardown } = context;
 
   onTeardown(() => {
@@ -52,8 +53,8 @@ export function createUiSlice(context: PluginContext): TgPluginApi['ui'] {
       });
     },
     showNotification: (notification: TgUiNotification) => {
-      // The action call can throw (e.g. a malformed payload); contain it like a callback
-      wrap(() => showPluginNotification(notification))();
+      // The runtime service can throw (e.g. a malformed payload); contain it like a callback
+      wrap(() => runtime.showNotification(notification))();
     },
   };
 }

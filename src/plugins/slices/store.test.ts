@@ -36,6 +36,9 @@ function createTestStoreSlice() {
     getCurrentUserId: () => '100',
     getChat: (chatId) => (chatId === '10' ? fakeChat : undefined),
     getLocalizedString: (key) => `translated:${key}`,
+    showNotification: () => {
+      throw new Error('the store slice never shows notifications');
+    },
   };
 
   const context = createPluginContext(TEST_PLUGIN_NAME, runtime.createPluginReporter(TEST_PLUGIN_NAME));

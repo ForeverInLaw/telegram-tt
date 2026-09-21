@@ -58,6 +58,9 @@ function createTestApiSlice({
     getCurrentUserId: () => '100',
     getChat: (chatId) => (chatIds.includes(chatId) ? ({ id: chatId } as ApiChat) : undefined),
     getLocalizedString: (key) => `translated:${key}`,
+    showNotification: () => {
+      throw new Error('the api slice never shows notifications');
+    },
   };
 
   const context = createPluginContext(TEST_PLUGIN_NAME, runtime.createPluginReporter(TEST_PLUGIN_NAME));

@@ -27,6 +27,9 @@ function createFakeRuntime(enabledMap: Record<string, boolean> = {}) {
     getActions: () => {
       throw new Error('not exercised');
     },
+    showNotification: () => {
+      throw new Error('not exercised');
+    },
     getCurrentTabId: () => 0,
     mainThreadId: -1,
     getActiveMessageList: () => undefined,

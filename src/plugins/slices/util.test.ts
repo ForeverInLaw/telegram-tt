@@ -43,6 +43,9 @@ function createTestUtilSlice() {
       throw new Error('the util slice never reads the store');
     },
     getLocalizedString: (key, variables) => `translated:${key}:${JSON.stringify(variables ?? {})}`,
+    showNotification: () => {
+      throw new Error('the util slice never shows notifications');
+    },
   };
 
   const context = createPluginContext(TEST_PLUGIN_NAME, runtime.createPluginReporter(TEST_PLUGIN_NAME));

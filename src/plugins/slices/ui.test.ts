@@ -1,28 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApiChat } from '../../api/types';
 import type { PluginContext } from '../context';
-import type { TgPluginReporter } from '../runtime';
-
-const { showNotificationAction } = vi.hoisted(() => ({ showNotificationAction: vi.fn() }));
-
-// The notification service (runtime.ts) reaches the app's global store and the
-// multitab token; both load under jsdom, so only `getActions` is overridden —
-// the real modules keep this suite aligned with what the runtime imports.
-vi.mock('../../global', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../global')>();
-  return {
-    ...actual,
-    getActions: () => ({ showNotification: showNotificationAction }),
-  };
-});
-vi.mock('../../util/establishMultitabRole', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../util/establishMultitabRole')>();
-  return {
-    ...actual,
-    getCurrentTabId: () => 12345,
-  };
-});
+import type { TgPluginReporter, TgPluginRuntime } from '../runtime';
 
 import { createPluginContext } from '../context';
 import {
@@ -34,9 +14,15 @@ type CapturedError = { action: string; error: unknown };
 
 const TEST_PLUGIN_NAME = 'ui-slice-owner';
 
-/** Builds a real plugin context over a capturing reporter, like the host does. */
-function createTestContext(pluginName: string) {
+/**
+ * Builds the slice over a real plugin context and a minimal runtime double.
+ * The ui slice consumes only the notification service, so every other runtime
+ * capability stays unexercised and this suite imports no app modules.
+ */
+function createTestUiSlice(pluginName: string) {
   const capturedErrors: CapturedError[] = [];
+  const showNotification = vi.fn();
+
   const reporter: TgPluginReporter = {
     log: () => {},
     logError: (action, error) => {
@@ -51,15 +37,47 @@ function createTestContext(pluginName: string) {
     },
   };
 
-  return { context: createPluginContext(pluginName, reporter), capturedErrors };
+  const runtime: TgPluginRuntime = {
+    isPluginEnabled: () => true,
+    setPluginEnabled: () => {},
+    createPluginReporter: () => {
+      throw new Error('the ui slice never creates a reporter');
+    },
+    subscribeApiUpdates: () => () => {},
+    subscribeToStoreChanges: () => {},
+    getActions: () => {
+      throw new Error('the ui slice never dispatches actions');
+    },
+    getCurrentTabId: () => 0,
+    mainThreadId: 0,
+    getActiveMessageList: () => undefined,
+    getActiveChatId: () => {
+      throw new Error('the ui slice never reads the store');
+    },
+    getCurrentUserId: () => {
+      throw new Error('the ui slice never reads the store');
+    },
+    getChat: () => {
+      throw new Error('the ui slice never reads the store');
+    },
+    getLocalizedString: () => {
+      throw new Error('the ui slice never translates');
+    },
+    showNotification,
+  };
+
+  const context = createPluginContext(pluginName, reporter);
+
+  return {
+    context,
+    ui: createUiSlice(context, runtime),
+    capturedErrors,
+    showNotification,
+  };
 }
 
 describe('ui slice', () => {
   let activeContext: PluginContext | undefined;
-
-  beforeEach(() => {
-    showNotificationAction.mockClear();
-  });
 
   afterEach(() => {
     // Every test's context tears down its own contributions.
@@ -68,9 +86,8 @@ describe('ui slice', () => {
   });
 
   it('registers items on every surface in registration order', () => {
-    const { context } = createTestContext(TEST_PLUGIN_NAME);
+    const { context, ui } = createTestUiSlice(TEST_PLUGIN_NAME);
     activeContext = context;
-    const ui = createUiSlice(context);
 
     ui.addMessageContextMenuItem({ label: 'Message item', onClick: () => {} });
     ui.addChatContextMenuItem({ label: 'Chat item', onClick: () => {} });
@@ -84,9 +101,8 @@ describe('ui slice', () => {
   });
 
   it('passes the descriptor payload to the wrapped callbacks', () => {
-    const { context } = createTestContext(TEST_PLUGIN_NAME);
+    const { context, ui } = createTestUiSlice(TEST_PLUGIN_NAME);
     activeContext = context;
-    const ui = createUiSlice(context);
     const received: unknown[] = [];
 
     ui.addChatContextMenuItem({
@@ -116,9 +132,8 @@ describe('ui slice', () => {
   });
 
   it('contains a throwing handler at invocation and keeps the item registered', () => {
-    const { context, capturedErrors } = createTestContext(TEST_PLUGIN_NAME);
+    const { context, ui, capturedErrors } = createTestUiSlice(TEST_PLUGIN_NAME);
     activeContext = context;
-    const ui = createUiSlice(context);
 
     ui.addMainMenuItem({
       label: 'Throwing item',
@@ -136,45 +151,38 @@ describe('ui slice', () => {
     ))).toBe(true);
   });
 
-  it('shows a notification with the descriptor payload, a fresh localId and the current tabId', () => {
-    const { context } = createTestContext(TEST_PLUGIN_NAME);
+  it('passes the notification descriptor to the runtime service', () => {
+    const { context, ui, showNotification } = createTestUiSlice(TEST_PLUGIN_NAME);
     activeContext = context;
-    const ui = createUiSlice(context);
 
     ui.showNotification({ title: 'Plugin title', message: 'Plugin body', icon: 'star', duration: 4000 });
 
-    expect(showNotificationAction).toHaveBeenCalledTimes(1);
-    expect(showNotificationAction).toHaveBeenCalledWith(expect.objectContaining({
+    expect(showNotification).toHaveBeenCalledTimes(1);
+    expect(showNotification).toHaveBeenCalledWith({
       title: 'Plugin title',
       message: 'Plugin body',
       icon: 'star',
       duration: 4000,
-      tabId: 12345,
-    }));
-
-    const [payload] = showNotificationAction.mock.calls[0];
-    expect(payload.localId).toMatch(/^plugin-notification-/);
+    });
   });
 
-  it('stacks repeated notifications instead of deduping them by message', () => {
-    const { context } = createTestContext(TEST_PLUGIN_NAME);
+  it('forwards repeated notifications to the runtime service unchanged', () => {
+    const { context, ui, showNotification } = createTestUiSlice(TEST_PLUGIN_NAME);
     activeContext = context;
-    const ui = createUiSlice(context);
 
     ui.showNotification({ message: 'Repeated' });
     ui.showNotification({ message: 'Repeated' });
 
-    expect(showNotificationAction).toHaveBeenCalledTimes(2);
-    const [firstPayload, secondPayload] = showNotificationAction.mock.calls.map(([payload]) => payload);
-    expect(firstPayload.localId).not.toBe(secondPayload.localId);
+    expect(showNotification).toHaveBeenCalledTimes(2);
+    expect(showNotification).toHaveBeenNthCalledWith(1, { message: 'Repeated' });
+    expect(showNotification).toHaveBeenNthCalledWith(2, { message: 'Repeated' });
   });
 
-  it('contains a throwing notification action and attributes it to the plugin', () => {
-    const { context, capturedErrors } = createTestContext(TEST_PLUGIN_NAME);
+  it('contains a throwing notification service and attributes it to the plugin', () => {
+    const { context, ui, capturedErrors, showNotification } = createTestUiSlice(TEST_PLUGIN_NAME);
     activeContext = context;
-    const ui = createUiSlice(context);
 
-    showNotificationAction.mockImplementationOnce(() => {
+    showNotification.mockImplementationOnce(() => {
       throw new Error('action boom');
     });
 
@@ -185,8 +193,7 @@ describe('ui slice', () => {
   });
 
   it('clears every surface of the plugin on teardown', () => {
-    const { context } = createTestContext(TEST_PLUGIN_NAME);
-    const ui = createUiSlice(context);
+    const { context, ui } = createTestUiSlice(TEST_PLUGIN_NAME);
 
     ui.addMessageContextMenuItem({ label: 'Message item', onClick: () => {} });
     ui.addChatContextMenuItem({ label: 'Chat item', onClick: () => {} });
@@ -202,17 +209,15 @@ describe('ui slice', () => {
   });
 
   it('clears only the disabled plugin and keeps other plugins registered', () => {
-    const { context: contextA } = createTestContext('ui-slice-owner-a');
-    const { context: contextB } = createTestContext('ui-slice-owner-b');
-    const uiA = createUiSlice(contextA);
-    const uiB = createUiSlice(contextB);
+    const sliceA = createTestUiSlice('ui-slice-owner-a');
+    const sliceB = createTestUiSlice('ui-slice-owner-b');
 
-    uiA.addMainMenuItem({ label: 'Item A', onClick: () => {} });
-    uiB.addMainMenuItem({ label: 'Item B', onClick: () => {} });
+    sliceA.ui.addMainMenuItem({ label: 'Item A', onClick: () => {} });
+    sliceB.ui.addMainMenuItem({ label: 'Item B', onClick: () => {} });
 
-    contextA.runTeardowns();
+    sliceA.context.runTeardowns();
 
     expect(getMainMenuItems().map((item) => item.label)).toEqual(['Item B']);
-    contextB.runTeardowns();
+    sliceB.context.runTeardowns();
   });
 });

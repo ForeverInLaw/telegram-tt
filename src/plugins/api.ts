@@ -15,7 +15,7 @@ import { createUtilSlice } from './slices/util';
  */
 export function buildTgApi(context: PluginContext, runtime: TgPluginRuntime): TgPluginApi {
   return {
-    ui: createUiSlice(context),
+    ui: createUiSlice(context, runtime),
     on: createEventsSlice(context),
     api: createApiSlice(context, runtime),
     store: createStoreSlice(context, runtime),

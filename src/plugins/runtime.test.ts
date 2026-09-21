@@ -1,8 +1,24 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { addActionHandler } from '../global';
 
+import type { GlobalActions } from '../global';
+import type { ActionReturnType } from '../global/types';
+
+import { getCurrentTabId } from '../util/establishMultitabRole';
 import { createPluginRuntime } from './runtime';
 
 const STORAGE_KEY = 'tt-plugins';
+
+/** Payload the store's `showNotification` action receives. */
+type ShownNotification = Parameters<GlobalActions['showNotification']>[0];
+
+// Captured through the store's own dispatch pipeline — the exact seam the
+// runtime's notification service calls into — so this suite mocks no modules.
+const shownNotifications: ShownNotification[] = [];
+
+addActionHandler('showNotification', (_global, _actions, payload): ActionReturnType => {
+  shownNotifications.push(payload);
+});
 
 // The translation fn itself is not exercised in this suite; it is injected
 // only because runtime.ts must not import its jsdom-incompatible module.
@@ -37,6 +53,41 @@ describe('plugin runtime storage', () => {
     localStorage.setItem(STORAGE_KEY, 'null');
 
     expect(createTestRuntime().isPluginEnabled('hello-plugin')).toBe(true);
+  });
+});
+
+describe('plugin runtime notification service', () => {
+  beforeEach(() => {
+    shownNotifications.length = 0;
+  });
+
+  it('shows a notification with a fresh localId and the current tab id', () => {
+    createTestRuntime().showNotification({
+      title: 'Plugin title',
+      message: 'Plugin body',
+      icon: 'star',
+      duration: 4000,
+    });
+
+    expect(shownNotifications).toHaveLength(1);
+    expect(shownNotifications[0]).toEqual(expect.objectContaining({
+      title: 'Plugin title',
+      message: 'Plugin body',
+      icon: 'star',
+      duration: 4000,
+      tabId: getCurrentTabId(),
+    }));
+    expect(shownNotifications[0].localId).toMatch(/^plugin-notification-/);
+  });
+
+  it('stacks repeated notifications instead of deduping them by message', () => {
+    const runtime = createTestRuntime();
+
+    runtime.showNotification({ message: 'Repeated' });
+    runtime.showNotification({ message: 'Repeated' });
+
+    expect(shownNotifications).toHaveLength(2);
+    expect(shownNotifications[0].localId).not.toBe(shownNotifications[1].localId);
   });
 });
 

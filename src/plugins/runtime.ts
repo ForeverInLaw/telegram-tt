@@ -71,6 +71,8 @@ export interface TgPluginRuntime {
   getChat: (chatId: string) => Readonly<ApiChat> | undefined;
   /** Translates an app lang key with optional substitution variables. */
   getLocalizedString: (key: LangKey, variables?: Record<string, LangVariable>) => string;
+  /** Shows an in-app notification through the app's own notification pipeline. */
+  showNotification: (notification: TgUiNotification) => void;
 }
 
 function loadEnabledMap(): PluginEnabledMap {
@@ -149,7 +151,27 @@ export function createPluginRuntime(getTranslationFn: () => LangFn): TgPluginRun
       return global.chats.byId[chatId] || global.users.byId[chatId];
     },
     getLocalizedString: (key, variables) => (getTranslationFn() as unknown as TranslateFn)(key, variables),
+    showNotification,
   };
+}
+
+// --- Notification service -----------------------------------------------------
+
+// Notification calls get a fresh id so repeated ones stack instead of deduping
+// on an identical message (the action dedupes by message without a localId).
+let notificationCounter = 0;
+
+/** Shows a plugin notification through the app's own pipeline (`showNotification` action). */
+function showNotification(notification: TgUiNotification) {
+  notificationCounter += 1;
+  getActions().showNotification({
+    title: notification.title,
+    message: notification.message,
+    icon: notification.icon,
+    duration: notification.duration,
+    localId: `${PLUGIN_NOTIFICATION_LOCAL_ID_PREFIX}${notificationCounter}`,
+    tabId: getCurrentTabId(),
+  });
 }
 
 // --- Event stream services consumed by src/plugins/events.ts ------------------
@@ -176,21 +198,4 @@ function readActiveMessageList(): MessageList | undefined {
   // `window.matchMedia` at import time, which the vitest jsdom environment
   // does not provide.
   return getGlobal().byTabId?.[getCurrentTabId()]?.messageLists.at(-1);
-}
-
-// Notification calls get a fresh id so repeated ones stack instead of deduping
-// on an identical message (the action dedupes by message without a localId).
-let notificationCounter = 0;
-
-/** Shows a plugin notification through the app's own pipeline (`showNotification` action). */
-export function showPluginNotification(notification: TgUiNotification) {
-  notificationCounter += 1;
-  getActions().showNotification({
-    title: notification.title,
-    message: notification.message,
-    icon: notification.icon,
-    duration: notification.duration,
-    localId: `${PLUGIN_NOTIFICATION_LOCAL_ID_PREFIX}${notificationCounter}`,
-    tabId: getCurrentTabId(),
-  });
 }
