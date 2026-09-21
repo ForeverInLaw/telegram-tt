@@ -27,6 +27,7 @@ import {
   groupStatefulContent,
 } from '../../../global/helpers';
 import { getPeerTitle } from '../../../global/helpers/peers';
+import { getMessageContextMenuItems } from '../../../plugins/registry';
 import buildClassName from '../../../util/buildClassName';
 import { isUserId } from '../../../util/entities/ids';
 import { disableScrolling } from '../../../util/scrollLock';
@@ -476,6 +477,16 @@ const MessageContextMenu = ({
           </MenuItem>
         )}
         {canEdit && <MenuItem icon="edit" onClick={onEdit}>{oldLang('Edit')}</MenuItem>}
+        {getMessageContextMenuItems().map((item) => (
+          <MenuItem
+            key={`plugin-${item.label}`}
+            icon={item.icon}
+            destructive={item.destructive}
+            onClick={() => item.onClick(message)}
+          >
+            {item.label}
+          </MenuItem>
+        ))}
         {canAppendTodoList && (
           <MenuItem icon="add" onClick={onAppendTodoList}>
             {lang('MenuButtonAppendTodoList')}

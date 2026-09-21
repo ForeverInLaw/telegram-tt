@@ -32,6 +32,11 @@ import App from './components/App';
 import './assets/fonts/roboto.css';
 import './styles/index.scss';
 
+import { initPlugins } from './plugins/host';
+
+// Plugins are loaded synchronously before the app boots.
+initPlugins();
+
 if (STRICTERDOM_ENABLED) {
   enableStrict();
 }
