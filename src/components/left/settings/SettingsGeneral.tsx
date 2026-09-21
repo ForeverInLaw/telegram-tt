@@ -1,6 +1,6 @@
 import type { Event } from '@tauri-apps/api/event';
 import {
-  memo, useCallback, useEffect, useState,
+  memo, useCallback, useEffect, useRef, useState,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
@@ -66,6 +66,8 @@ const SettingsGeneral = ({
   const isMobileDevice = isMobile && (IS_IOS || IS_ANDROID);
 
   const [isAutostartEnabled, setIsAutostartEnabled] = useState(false);
+  // Marks the autostart state as user-controlled; the initial async read must not overwrite it
+  const isAutostartTouchedRef = useRef(false);
   const appUpdateState = useAppUpdateState();
 
   const isUpdateCheckAvailable = IS_TAURI && window.tauri?.withUpdater;
@@ -130,6 +132,7 @@ const SettingsGeneral = ({
   });
 
   const handleAutostartChange = useLastCallback((isChecked: boolean) => {
+    isAutostartTouchedRef.current = true;
     setIsAutostartEnabled(isChecked);
     if (!IS_TAURI) return;
 
@@ -140,6 +143,7 @@ const SettingsGeneral = ({
   });
 
   const handleAutostartChanged = useLastCallback((event: Event<boolean>) => {
+    isAutostartTouchedRef.current = true;
     setIsAutostartEnabled(event.payload);
   });
 
@@ -149,7 +153,12 @@ const SettingsGeneral = ({
 
   useEffect(() => {
     if (!IS_TAURI) return;
-    void window.tauri.getAutostartEnabled().then(setIsAutostartEnabled).catch(() => undefined);
+    void window.tauri.getAutostartEnabled().then((isEnabled) => {
+      // Ignore the stale initial read when the state was already changed by the user or another window
+      if (!isAutostartTouchedRef.current) {
+        setIsAutostartEnabled(isEnabled);
+      }
+    }).catch(() => undefined);
   }, []);
 
   useTauriEvent('autostart-changed', handleAutostartChanged);
