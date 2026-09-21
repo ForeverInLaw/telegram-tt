@@ -19,29 +19,32 @@ impl Deeplink {
       let urls = event.urls();
       info!("Deep link received: {:?}", urls);
 
-      // Get the main window
-      if let Some(window) = app_handle.get_webview_window("main") {
-        // Emit the deep link event to the frontend
-        if let Err(err) = window.emit("deeplink", &urls) {
-          info!("Error emitting deeplink event: {:?}", err);
-        }
+      // Broadcast to every webview window; window labels are random UUIDs,
+      // so there is no fixed window label to target
+      if let Err(err) = app_handle.emit("deeplink", &urls) {
+        info!("Error emitting deeplink event: {:?}", err);
+      }
 
-        // Request user attention and focus the window
-        if let Err(err) = window.request_user_attention(Some(UserAttentionType::Informational)) {
-          info!("Error requesting user attention: {:?}", err);
-        }
+      // Show and focus the first available window
+      let windows = app_handle.windows();
+      let Some(window) = windows.values().next() else {
+        return;
+      };
 
-        if let Err(err) = window.show() {
-          info!("Error showing window: {:?}", err);
-        }
+      if let Err(err) = window.request_user_attention(Some(UserAttentionType::Informational)) {
+        info!("Error requesting user attention: {:?}", err);
+      }
 
-        if let Err(err) = window.unminimize() {
-          info!("Error unminimizing window: {:?}", err);
-        }
+      if let Err(err) = window.show() {
+        info!("Error showing window: {:?}", err);
+      }
 
-        if let Err(err) = window.set_focus() {
-          info!("Error setting focus: {:?}", err);
-        }
+      if let Err(err) = window.unminimize() {
+        info!("Error unminimizing window: {:?}", err);
+      }
+
+      if let Err(err) = window.set_focus() {
+        info!("Error setting focus: {:?}", err);
       }
     });
 
