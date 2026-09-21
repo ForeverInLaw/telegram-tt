@@ -483,6 +483,10 @@
 "SettingsAutomaticTextReplacementsInfo" = "Convert --, << and >> as you type";
 "SettingsAutostart" = "Launch on system startup";
 "SettingsAutostartDesc" = "Run Telegram Air when you log in";
+"TrayMenuOpen" = "Open Telegram";
+"TrayMenuQuit" = "Quit Telegram";
+"TrayMenuAutostart" = "Launch on system startup";
+"TrayMenuCheckUpdates" = "Check for updates";
 "SettingsTray" = "Show Icon in Menu Bar";
 "SettingsOfflineNotificationUnsupported" = "Not supported";
 "TextSize" = "Message Font Size";

@@ -33,6 +33,11 @@ export default function initTauriApi() {
     return core.invoke<void>('set_autostart_enabled', { enabled });
   }
 
+  async function setMenuTranslations(labels: Record<string, string>) {
+    const core = await corePromise;
+    return core.invoke<void>('set_menu_translations', { translations: labels });
+  }
+
   // @ts-expect-error
   window.tauri ??= {};
   Object.assign(window.tauri, {
@@ -44,5 +49,6 @@ export default function initTauriApi() {
     setWindowTitle,
     getAutostartEnabled,
     setAutostartEnabled,
+    setMenuTranslations,
   });
 }

@@ -11,6 +11,7 @@ type TauriApi = {
   setWindowTitle: (title: string) => Promise<void>;
   getAutostartEnabled: () => Promise<boolean>;
   setAutostartEnabled: (enabled: boolean) => Promise<void>;
+  setMenuTranslations: (labels: Record<string, string>) => Promise<void>;
 };
 
 declare global {

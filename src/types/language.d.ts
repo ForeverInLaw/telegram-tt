@@ -420,6 +420,10 @@ export interface LangPair {
   'SettingsAutomaticTextReplacementsInfo': undefined;
   'SettingsAutostart': undefined;
   'SettingsAutostartDesc': undefined;
+  'TrayMenuOpen': undefined;
+  'TrayMenuQuit': undefined;
+  'TrayMenuAutostart': undefined;
+  'TrayMenuCheckUpdates': undefined;
   'SettingsTray': undefined;
   'SettingsOfflineNotificationUnsupported': undefined;
   'TextSize': undefined;
