@@ -9,6 +9,8 @@ export default definePlugin({
   name: 'echo-plugin',
   version: '0.1.0',
   description: 'Replies to any message with a canned echo text.',
+  // Demo plugin: off until the user enables it in Settings → Plugins
+  isEnabledByDefault: false,
   setup(tg) {
     tg.ui.addMessageContextMenuItem({
       icon: 'reply',

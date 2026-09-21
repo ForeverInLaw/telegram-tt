@@ -87,7 +87,7 @@ export function loadPluginModule(pluginExport: unknown, path: string, runtime: T
   const reporter = runtime.createPluginReporter(plugin.name);
   loadedPlugins.set(plugin.name, plugin);
 
-  if (!runtime.isPluginEnabled(plugin.name)) {
+  if (!runtime.isPluginEnabled(plugin.name, plugin.isEnabledByDefault ?? true)) {
     reporter.log('is disabled, setup skipped');
     rebuildPluginList();
     return;

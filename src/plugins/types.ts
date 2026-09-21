@@ -60,6 +60,11 @@ export interface TgPlugin {
   version?: string;
   /** Short summary shown under the plugin name in Settings. */
   description?: string;
+  /**
+   * Enabled state until the user toggles the plugin in Settings; `true` when
+   * omitted. The bundled demo plugins declare `false` to stay off by default.
+   */
+  isEnabledByDefault?: boolean;
   /** Called at app startup and on every re-enable with a fresh `tg` object. */
   setup: (tg: TgPluginApi) => void | (() => void);
 }

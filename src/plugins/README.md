@@ -32,6 +32,7 @@ export default definePlugin({
 
 - `name` (required) — the unique registry key. The host skips a module whose name is already registered, and the enable/disable persistence keys off the name, so keep it stable.
 - `version?`, `description?` — plain data shown on the Settings → Plugins screen.
+- `isEnabledByDefault?` — enabled state until the user first toggles the plugin; `true` when omitted. The bundled demo plugins declare `false`, so they stay off until enabled in Settings → Plugins.
 - `setup` (required) — receives the `tg` object; described next.
 
 There is no registration step. The host ([`host.ts`](./host.ts)) globs `src/plugins/*/index.ts` and loads every valid default export at app startup, before the app boots. The dev bundler hot-reloads a changed plugin module. A module without a valid `TgPlugin` default export (or with a duplicate name) is logged and skipped — it never breaks the client.
@@ -52,7 +53,7 @@ setup(tg) {
 
 - **Disposer.** Called when the plugin is disabled. Anything the plugin did not clean up itself — menu items, composer buttons, event subscriptions — is removed by the host right after the disposer, so a missing disposer body cannot leak contributions.
 - **Enable/disable.** The Settings → Plugins screen lists every discovered plugin with a toggle. Toggling applies immediately, without a page reload: disabling runs the disposer and clears the plugin's registry entries and subscriptions; enabling re-runs `setup` with a fresh `tg` object and restores its contributions.
-- **Persistence.** The enabled/disabled choice is stored in localStorage, keyed by plugin name (globally, not per account), and read at startup: a disabled plugin is registered (listed in Settings) but its `setup` is never run until it is enabled.
+- **Persistence.** The enabled/disabled choice is stored in localStorage, keyed by plugin name (globally, not per account), and read at startup: a plugin without a stored choice starts from its `isEnabledByDefault` flag (`true` when omitted), and a disabled plugin is registered (listed in Settings) but its `setup` is never run until it is enabled.
 - **Error isolation.** Errors in `setup`, in any handler (`onClick`, event handlers), and in `tg.api` / `tg.store` / `tg.util` calls are caught and logged to the console with the plugin name. A throwing plugin never crashes the client, other plugins keep working, and a half-registered plugin (setup that throws midway) leaves no partial contributions behind. The Settings → Plugins toggle reflects that runtime state: a failed setup shows as off even though the stored choice stays on, and toggling the plugin on again retries `setup`.
 
 ## `tg.ui`

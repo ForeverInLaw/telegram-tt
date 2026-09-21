@@ -46,8 +46,11 @@ export interface TgPluginReporter {
 
 /** App and environment services the plugin host runs on; injectable for tests. */
 export interface TgPluginRuntime {
-  /** Persisted enabled flag, global (not per-account); plugins default to enabled. */
-  isPluginEnabled: (pluginName: string) => boolean;
+  /**
+   * Persisted enabled flag, global (not per-account); falls back to the
+   * plugin's `isEnabledByDefault` manifest flag, then to `true`.
+   */
+  isPluginEnabled: (pluginName: string, isEnabledByDefault: boolean) => boolean;
   setPluginEnabled: (pluginName: string, isEnabled: boolean) => void;
   createPluginReporter: (pluginName: string) => TgPluginReporter;
   /** Raw store updates from the worker-to-store pipeline; returns an unsubscribe function. */
@@ -113,7 +116,7 @@ function createReporter(pluginName: string): TgPluginReporter {
  */
 export function createPluginRuntime(getTranslationFn: () => LangFn): TgPluginRuntime {
   return {
-    isPluginEnabled: (pluginName) => loadEnabledMap()[pluginName] !== false,
+    isPluginEnabled: (pluginName, isEnabledByDefault) => loadEnabledMap()[pluginName] ?? isEnabledByDefault,
     setPluginEnabled: (pluginName, isEnabled) => {
       const enabledMap = loadEnabledMap();
       enabledMap[pluginName] = isEnabled;
