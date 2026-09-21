@@ -418,8 +418,12 @@ export interface LangPair {
   'SettingsKeyboard': undefined;
   'SettingsAutomaticTextReplacements': undefined;
   'SettingsAutomaticTextReplacementsInfo': undefined;
-  'SettingsAutostart': undefined;
+  'SettingsApp': undefined;
   'SettingsAutostartDesc': undefined;
+  'CheckForUpdates': undefined;
+  'NoUpdatesAvailable': undefined;
+  'UpdateAvailableNow': undefined;
+  'UpdateCheckFailed': undefined;
   'TrayMenuOpen': undefined;
   'TrayMenuQuit': undefined;
   'TrayMenuAutostart': undefined;
