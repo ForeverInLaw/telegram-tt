@@ -111,6 +111,10 @@ jobs:
           TELEGRAM_API_ID: ${{ vars.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         with:
+          # `tauriScript` pins the runner to the local `@tauri-apps/cli` installed by `npm ci`.
+          # Auto-detection would otherwise pick `bun` because the upstream `bun.lock`
+          # is tracked in the repository root and bun is not installed on the runner.
+          tauriScript: 'npm run tauri'
           args: "-c ${{ steps.config-overrides.outputs.json }}"
           tagName: ${{ steps.version.outputs.tag-name }}
           releaseName: ${{ steps.version.outputs.release-name }}
@@ -222,6 +226,10 @@ jobs:
           TELEGRAM_API_ID: ${{ vars.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         with:
+          # `tauriScript` pins the runner to the local `@tauri-apps/cli` installed by `npm ci`.
+          # Auto-detection would otherwise pick `bun` because the upstream `bun.lock`
+          # is tracked in the repository root and bun is not installed on the runner.
+          tauriScript: 'npm run tauri'
           args: "-c ${{ steps.config-overrides.outputs.json }}"
           tagName: ${{ steps.version.outputs.tag-name }}
           releaseName: ${{ steps.version.outputs.release-name }}
@@ -302,6 +310,9 @@ jobs:
           TELEGRAM_API_ID: ${{ vars.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         with:
+          # `tauriScript` pins the runner to the local `@tauri-apps/cli` installed by `npm ci`
+          # instead of the auto-detected `bun` (upstream `bun.lock` is tracked in the repo root)
+          tauriScript: 'npm run tauri'
           args: "-c ${{ steps.config-overrides.outputs.json }}"
           tagName: ${{ steps.version.outputs.tag-name }}
           releaseName: ${{ steps.version.outputs.release-name }}
