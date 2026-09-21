@@ -438,17 +438,20 @@ const Main = ({
     }
   }, [isSynced]);
 
-  useTauriEvent<string>('deeplink', (event) => {
-    try {
-      const url = event.payload || '';
-      const decodedUrl = decodeURIComponent(url);
-      processDeepLink(decodedUrl, { type: 'inner' });
-    } catch (e) {
-      if (DEBUG) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to process deep link', e);
+  useTauriEvent<string | string[]>('deeplink', (event) => {
+    // The Rust side broadcasts a URL collection (`Vec<Url>`); a legacy single string is also accepted
+    const urls = Array.isArray(event.payload) ? event.payload : [event.payload];
+    urls.filter(Boolean).forEach((url) => {
+      try {
+        const decodedUrl = decodeURIComponent(url);
+        processDeepLink(decodedUrl, { type: 'inner' });
+      } catch (err) {
+        if (DEBUG) {
+          // eslint-disable-next-line no-console
+          console.error('Failed to process deep link', err);
+        }
       }
-    }
+    });
   });
 
   useEffect(() => {
