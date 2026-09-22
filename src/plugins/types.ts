@@ -2,7 +2,7 @@ import type { ApiChat, ApiMessage, ApiUser } from '../api/types';
 import type { TeactNode } from '../lib/teact/teact';
 import type { ThreadId } from '../types';
 import type { IconName } from '../types/icons';
-import type { LangKey, LangVariable } from '../types/language';
+import type { LangKey, LangVariable, RegularLangKey } from '../types/language';
 
 /** A node factory plugins pass to `tg.ui` render surfaces; re-exported here so plugin code stays within the import policy. */
 export type TgTeactNode = TeactNode;
@@ -163,8 +163,8 @@ export interface TgUiNotification {
  * Settings → Plugins; the panel is removed when the plugin is disabled.
  */
 export interface TgSettingsPanelRegistration {
-  /** Panel section heading, an app lang key. */
-  title: LangKey;
+  /** Panel section heading, an app lang key without variables. */
+  title: RegularLangKey;
   /** Renders the panel's Teact node; called per render of the settings screen. */
   render: () => TeactNode;
 }
