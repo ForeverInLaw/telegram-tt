@@ -223,6 +223,9 @@ const MessageMeta = ({
             <span className="message-imported" onClick={handleImportedClick}>{lang('MessageMetaImported')}</span>
           </>
         )}
+        {message.isArchivedDeleted && (
+          <span className="message-archived-deleted">{lang('MessageArchivedDeleted')}</span>
+        )}
         {message.isEdited && !shouldShowPrimaryEditedDate && `${lang('MessageMetaEdited')} `}
         {message.isVideoProcessingPending && !shouldShowPrimaryEditedDate && `${lang('MessageMetaApproximate')} `}
         {date}

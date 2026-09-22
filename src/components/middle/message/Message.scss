@@ -276,6 +276,24 @@
     }
   }
 
+  // Ghost-retained messages (anti-delete): no delete animation plays, the
+  // bubble stays rendered with a "deleted" mark in the meta
+  &.is-archived-deleted {
+    > .message-content-wrapper {
+      .message-archived-deleted {
+        color: var(--secondary-color);
+        text-transform: lowercase;
+      }
+    }
+  }
+
+  &.is-archived-deleted-transparent {
+    > .Avatar,
+    > .message-content-wrapper {
+      opacity: 0.5;
+    }
+  }
+
   &.is-dissolving {
     visibility: hidden;
   }

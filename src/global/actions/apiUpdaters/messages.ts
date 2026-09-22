@@ -120,6 +120,8 @@ import {
   selectThreadReadState,
 } from '../../selectors/threads';
 
+import { shouldRetainDeletedMessage } from '../../../plugins/ghost';
+
 const ANIMATION_DELAY = 350;
 const SNAP_ANIMATION_DELAY = 1000;
 const VIDEO_PROCESSING_NOTIFICATION_DELAY = 1000;
@@ -897,7 +899,12 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
       if (messagesById && !isUserId(chatId)) {
         const tabId = getCurrentTabId();
-        global = deleteChatMessages(global, chatId, Object.keys(messagesById).map(Number));
+        // Ghost-retained messages stay in `byId` (the capability's contract);
+        // the reload below rebuilds the thread lists from fresh server data.
+        const resettableIds = Object.keys(messagesById)
+          .map(Number)
+          .filter((id) => !messagesById[id].isArchivedDeleted);
+        global = deleteChatMessages(global, chatId, resettableIds);
         setGlobal(global);
         actions.loadFullChat({ chatId, force: true });
         actions.loadViewportMessages({ chatId, threadId: MAIN_THREAD_ID, tabId });
@@ -907,9 +914,9 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     }
 
     case 'deleteMessages': {
-      const { ids, chatId } = update;
+      const { ids, chatId, isLocal } = update;
 
-      deleteMessages(global, chatId, ids, actions);
+      deleteMessages(global, chatId, ids, actions, isLocal);
       break;
     }
 
@@ -1574,7 +1581,7 @@ export function deleteThread<T extends GlobalState>(
 }
 
 export function deleteMessages<T extends GlobalState>(
-  global: T, chatId: string | undefined, ids: number[], actions: RequiredGlobalActions,
+  global: T, chatId: string | undefined, ids: number[], actions: RequiredGlobalActions, isLocal = false,
 ) {
   // Channel update
 
@@ -1586,9 +1593,20 @@ export function deleteMessages<T extends GlobalState>(
     threadIdsToUpdate.add(MAIN_THREAD_ID);
 
     ids.forEach((id) => {
-      global = updateChatMessage(global, chatId, id, {
-        isDeleting: true,
-      });
+      // The ghost-retention capability: capture-worthy messages get the
+      // retention flag instead of `isDeleting`, so they skip the delete
+      // animation, stay in `byId` and keep their media loaded. Retained ids
+      // never join the physical-removal timeout list below.
+      if (shouldRetainDeletedMessage(global, chatId, id, isLocal)) {
+        global = updateChatMessage(global, chatId, id, {
+          isArchivedDeleted: true,
+          isDeleting: undefined,
+        });
+      } else {
+        global = updateChatMessage(global, chatId, id, {
+          isDeleting: true,
+        });
+      }
 
       if (selectTopic(global, chatId, id)) {
         global = deleteTopic(global, chatId, id);
@@ -1659,9 +1677,12 @@ export function deleteMessages<T extends GlobalState>(
     if (commonBoxChatId) {
       chatIdsToUpdate.push(commonBoxChatId);
 
-      global = updateChatMessage(global, commonBoxChatId, id, {
-        isDeleting: true,
-      });
+      // Same capability decision as the channel path: retained ghosts get
+      // the retention flag and skip the per-id removal timeout below.
+      const shouldRetain = shouldRetainDeletedMessage(global, commonBoxChatId, id, isLocal);
+
+      global = updateChatMessage(global, commonBoxChatId, id,
+        shouldRetain ? { isArchivedDeleted: true, isDeleting: undefined } : { isDeleting: true });
 
       const newLastMessage = findLastMessage(global, commonBoxChatId);
       if (newLastMessage) {
@@ -1683,6 +1704,8 @@ export function deleteMessages<T extends GlobalState>(
       if (message?.content.action?.type === 'chatEditPhoto' && message.content.action.photo) {
         global = deletePeerPhoto(global, commonBoxChatId, message.content.action.photo.id, true);
       }
+
+      if (shouldRetain) return;
 
       const isAnimatingAsSnap = selectCanAnimateSnapEffect(global);
 

@@ -132,6 +132,7 @@ import { selectThreadInfo, selectThreadReadState } from '../../../global/selecto
 import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import { IS_ANDROID, IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import { getSettings } from '../../../plugins/anti-delete-plugin/settings';
 import buildStyle from '../../../util/buildStyle';
 import { isUserId } from '../../../util/entities/ids';
 import { getMessageKey } from '../../../util/keys/messageKey';
@@ -835,6 +836,8 @@ const Message = ({
     isFocused && !noFocusHighlight && 'focused',
     isForwarding && 'is-forwarding',
     isPlayingDeleteAnimation && 'is-deleting',
+    message.isArchivedDeleted && 'is-archived-deleted',
+    message.isArchivedDeleted && getSettings().shouldGhostBeTransparent && 'is-archived-deleted-transparent',
     isPlayingSnapAnimation && 'is-dissolving',
     isInDocumentGroup && 'is-in-document-group',
     isAlbum && 'is-album',

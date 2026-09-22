@@ -293,6 +293,12 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
     messageStore.ephemeralById ||= {};
   });
 
+  // Ghost retention (`ApiMessage.isArchivedDeleted`, anti-delete plugin): no
+  // migration for persisted globals — an absent flag means a live message,
+  // and a present flag is honored at read time (a disabled plugin ignores it
+  // when deciding new retentions, and the store never physically removes a
+  // flagged message). Persisted ghosts therefore hydrate as-is.
+
   // Pre-fill settings with defaults
   cached.settings.byKey = {
     ...initialState.settings.byKey,
