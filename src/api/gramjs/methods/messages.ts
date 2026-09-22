@@ -1386,9 +1386,12 @@ export async function deleteMessages({
 
   processAffectedHistory(chat, result);
 
+  // The ack echo of this client's own delete call: locally-initiated, so the
+  // plugin layer can exclude the user's own deletions from archival.
   sendApiUpdate({
     '@type': 'deleteMessages',
     ids: messageIds,
+    isLocal: true,
     ...(isChannel && { chatId: chat.id }),
   });
 }

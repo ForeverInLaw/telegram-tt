@@ -505,6 +505,9 @@ export async function createStorageEngine(services: TgStorageServices): Promise<
     }
     meta = { ...meta, budgetBytes: bytes };
     await recordBackend.set(META_KEY, meta);
+    // A shrunken budget evicts immediately, so the usage bar reflects the
+    // new ceiling without waiting for the next blob write
+    await evictForBytes(0);
   }
 
   async function setPerBlobCapBytes(bytes: number) {

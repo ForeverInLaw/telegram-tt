@@ -6,7 +6,7 @@ import { createArchive } from './archive';
 import { buildCaptureKey, buildCaptureRecord, isServiceMessage } from './capture';
 import { captureMessageMedia } from './mediaCapture';
 import { registerSettingsPanelGlue } from './registerPanel';
-import { captureRevisionFromUpdate } from './revisions';
+import { captureRevisionFromUpdate, isBotChat } from './revisions';
 import { getSettings, loadSettings, resetSettings } from './settings';
 import { createArchiveViewerScreen } from './viewer';
 
@@ -111,7 +111,13 @@ function captureDeletedMessages(tg: TgPluginApi, payload: TgMessageDeletedPayloa
     // no recoverable content
     if (isServiceMessage(message)) continue;
 
-    const record = buildCaptureRecord(item.chatId, item.messageId, message, source);
+    // The name snapshot rides the same synchronous window as the message:
+    // the user record may leave the store with the message
+    const senderName = message.senderId === undefined
+      ? undefined
+      : resolveSenderName(tg, message.senderId);
+
+    const record = buildCaptureRecord(item.chatId, item.messageId, message, source, senderName);
 
     // The write is async by contract; the slice contains backend errors, and
     // this catch guards the chain itself so a throw never reaches the host
@@ -130,15 +136,17 @@ function captureDeletedMessages(tg: TgPluginApi, payload: TgMessageDeletedPayloa
 }
 
 /**
- * A bot chat is a private chat whose peer is a bot user. The chat record
- * carries no bot flag, so the check reads the user record the private chat
- * resolves to. Unknown users and non-private chat types capture (spec keeps
- * coverage when detection is ambiguous).
+ * The sender's display name (first + last, falling back per field present),
+ * snapshotted while the store still knows the user. Anonymous channel posts
+ * and unresolvable ids stay `undefined`; the viewer falls back to the id.
  */
-function isBotChat(tg: TgPluginApi, chatId: string): boolean {
-  const chat = tg.store.getChat(chatId);
-  if (chat?.type !== 'chatTypePrivate') return false;
+function resolveSenderName(tg: TgPluginApi, senderId: string): string | undefined {
+  const user = tg.store.getUser(senderId);
+  if (user === undefined) return undefined;
 
-  const user = tg.store.getUser(chatId);
-  return user !== undefined && user.type === 'userTypeBot';
+  if (user.firstName && user.lastName) {
+    return `${user.firstName} ${user.lastName}`;
+  }
+
+  return user.firstName ?? user.lastName;
 }

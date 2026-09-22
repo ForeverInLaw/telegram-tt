@@ -6,7 +6,7 @@ import {
   clearChatContextMenuItems, clearComposerButtons, clearMainMenuItems, clearMessageContextMenuItems,
   clearSettingsPanels, closeActivePluginScreen, closePluginScreen, getActivePluginScreen,
   getChatContextMenuItems, getComposerButtons, getMainMenuItems, getMessageContextMenuItems,
-  getPluginScreenVersion, getSettingsPanels, openPluginScreen, registerChatContextMenuItem,
+  getSettingsPanels, openPluginScreen, registerChatContextMenuItem,
   registerComposerButton, registerMainMenuItem, registerMessageContextMenuItem, registerSettingsPanel,
   subscribeToPluginScreen, subscribeToSettingsPanels,
 } from './registry';
@@ -163,27 +163,23 @@ describe('active plugin screen', () => {
     expect(second.onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('notifies subscribers on open and close, with a bumped version', () => {
+  it('notifies subscribers on open and close', () => {
     const listener = vi.fn();
     const unsubscribe = subscribeToPluginScreen(listener);
-    const versionBefore = getPluginScreenVersion();
-    const { screen } = createTestScreen('Versioned');
+    const { screen } = createTestScreen('Subscribed');
 
     openPluginScreen('registry-screen-a', screen);
-    const versionAfterOpen = getPluginScreenVersion();
 
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(versionAfterOpen).toBeGreaterThan(versionBefore);
 
     listener.mockClear();
     closePluginScreen('registry-screen-a');
 
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(getPluginScreenVersion()).toBeGreaterThan(versionAfterOpen);
 
     listener.mockClear();
     unsubscribe();
-    // No-op close: no notification, no version bump
+    // No-op close: no notification
     closePluginScreen('registry-screen-a');
     expect(listener).not.toHaveBeenCalled();
   });

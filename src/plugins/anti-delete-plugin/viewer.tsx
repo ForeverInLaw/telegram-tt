@@ -192,14 +192,16 @@ const ArchiveViewer: FC<OwnProps> = ({ archive, chatId, localize }) => {
     // The search walk is exhaustive; only the paged walk loads more.
     if (isInSearch || isLoadingRef.current || nextCursor === undefined) return;
 
+    // The list runs newest-first, so older captures sit at the top edge:
+    // scrolling up towards them loads the next page (the list then keeps
+    // the visual position by growing upwards).
     const container = e.currentTarget;
-    const distanceToEnd = container.scrollHeight - container.scrollTop - container.offsetHeight;
-    if (distanceToEnd > LOAD_MORE_THRESHOLD_PX) return;
+    if (container.scrollTop > LOAD_MORE_THRESHOLD_PX) return;
 
     const cursor = nextCursor;
     isLoadingRef.current = true;
     void archive.readCaptures(chatId, { limit: PAGE_LIMIT, cursor }).then((page) => {
-      setCaptures((previous) => [...previous ?? [], ...page.captures]);
+      setCaptures((previous) => [...page.captures, ...previous ?? []]);
       setNextCursor(page.nextCursor);
       isLoadingRef.current = false;
     }).catch(() => {
@@ -369,7 +371,9 @@ function renderCaptureRow(
   return (
     <div key={`${capture.chatId}-${capture.messageId}`} className={styles.row}>
       <div className={styles.rowHeader}>
-        <span className={styles.sender} dir="auto">{capture.senderId ?? localize('DeletedMessagesUnknownSender')}</span>
+        <span className={styles.sender} dir="auto">
+          {capture.senderName ?? capture.senderId ?? localize('DeletedMessagesUnknownSender')}
+        </span>
         <span className={styles.meta}>
           <span className={styles.deletedMark}>{localize('DeletedMessagesDeletedMark')}</span>
           <span className={styles.source}>{localize(SOURCE_LANG_KEYS[capture.source])}</span>

@@ -46,6 +46,8 @@ export interface AntiDeleteCaptureRecord {
   messageId: number;
   /** Sender's user/chat id; `undefined` for channel posts and anonymous admins. */
   senderId: string | undefined;
+  /** Resolved display name snapshot (user first/last name at capture time); `undefined` when unresolvable. */
+  senderName: string | undefined;
   /** Unix date of the original message. */
   date: number;
   /** The message's formatted text, when it had one. */
@@ -124,6 +126,7 @@ export function buildCaptureRecord(
   messageId: number,
   message: Readonly<AntiDeleteMessage>,
   source: TgDeletionSource,
+  senderName?: string,
 ): AntiDeleteCaptureRecord {
   const text = message.content.text;
 
@@ -132,6 +135,7 @@ export function buildCaptureRecord(
     chatId,
     messageId,
     senderId: message.senderId,
+    senderName,
     date: message.date,
     text: text === undefined ? undefined : { text: text.text, entities: text.entities },
     content: summarizeContent(message.content),

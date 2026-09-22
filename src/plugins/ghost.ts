@@ -3,10 +3,10 @@
  * native delete pipeline. The shared `deleteMessages` updater consults this
  * module synchronously (the check runs inside the update dispatch, before the
  * native reducers), so it stays pure: no side effects, no async reads, no
- * store mutation. The store arrives as a parameter because this module is
- * plugin-layer and must not import from src/global modules; app code
- * importing from src/plugins is the legal direction, so the native updater
- * may import this module.
+ * store mutation. Plugin FOLDERS never import src/global; this plugin-layer
+ * seam module may (like runtime.ts), because app code importing from
+ * src/plugins is the legal direction — the native updater imports this module,
+ * so the selectors it needs arrive from the app side.
  *
  * Capability follows the plugin host state: the Settings toggle runs the
  * plugin's disposer and `setPluginEnabled`, so a disabled plugin retains

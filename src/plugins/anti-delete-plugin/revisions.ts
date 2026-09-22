@@ -75,7 +75,7 @@ export function captureRevisionFromUpdate(tg: TgPluginApi, payload: TgMessageEdi
   if (tg.store.getCurrentUserId() === message.senderId) return;
 
   // Bot chats follow the bots toggle; ambiguous detections default to capturing
-  if (!getSettings().shouldCaptureBots && isBotRevisionChat(tg, chatId)) return;
+  if (!getSettings().shouldCaptureBots && isBotChat(tg, chatId)) return;
 
   // The store still holds the pre-edit revision at this point of the dispatch;
   // the snapshot must happen right here, synchronously.
@@ -126,12 +126,12 @@ function buildRevisionRecord(
 }
 
 /**
- * A bot chat is a private chat whose peer is a bot user. Detection mirrors
- * the deletion pipeline's: the chat record carries no bot flag, so the check
- * reads the user record the private chat resolves to; unknown users and
- * non-private chat types capture.
+ * A bot chat is a private chat whose peer is a bot user. Shared with the
+ * deletion capture pipeline (`index.ts`): the chat record carries no bot
+ * flag, so the check reads the user record the private chat resolves to;
+ * unknown users and non-private chat types capture.
  */
-function isBotRevisionChat(tg: TgPluginApi, chatId: string): boolean {
+export function isBotChat(tg: TgPluginApi, chatId: string): boolean {
   const chat = tg.store.getChat(chatId);
   if (chat?.type !== 'chatTypePrivate') return false;
 

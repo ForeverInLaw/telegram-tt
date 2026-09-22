@@ -274,6 +274,24 @@ describe('storage engine: LRU eviction', () => {
     expect((await engine.getUsage()).usedBytes).toBe(180);
   });
 
+  it('evicts immediately when the budget shrinks below current usage', async () => {
+    const test = createTestServices();
+    const engine = await createStorageEngine(test.services);
+    await engine.setBudgetBytes(200);
+    await engine.setPerBlobCapBytes(1024 * 1024);
+
+    await engine.putBlob('plugin-a:old', createBlob(100)); // capturedAt 1
+    await engine.putBlob('plugin-a:new', createBlob(60)); // capturedAt 2
+
+    // The slider moves down: the squeeze evicts oldest-captured-first without
+    // waiting for the next blob write
+    await engine.setBudgetBytes(100);
+
+    expect(test.blobBackend.blobs.has('plugin-a:old')).toBe(false);
+    expect(await engine.getBlob('plugin-a:new')).toBeDefined();
+    expect((await engine.getUsage()).usedBytes).toBe(60);
+  });
+
   it('never blocks on a failed eviction', async () => {
     const test = createTestServices();
     const engine = await createStorageEngine(test.services);

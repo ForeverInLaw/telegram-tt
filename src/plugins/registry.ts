@@ -152,8 +152,6 @@ function notifySettingsPanelsChanged() {
 type ActivePluginScreen = { pluginName: string; screen: TgPluginScreen };
 
 let activePluginScreen: ActivePluginScreen | undefined;
-let pluginScreenVersion = 0;
-
 const pluginScreenListeners = new Set<() => void>();
 
 /** Opens a plugin screen, replacing the currently open one (firing its `onClose` first). */
@@ -186,11 +184,6 @@ export function getActivePluginScreen(): ActivePluginScreen | undefined {
   return activePluginScreen;
 }
 
-/** Returns the screen-state version, bumped on every open/close; lets containers skip redundant work. */
-export function getPluginScreenVersion(): number {
-  return pluginScreenVersion;
-}
-
 /** Subscribes to screen open/close changes; returns the unsubscribe function. */
 export function subscribeToPluginScreen(listener: () => void): () => void {
   pluginScreenListeners.add(listener);
@@ -200,7 +193,6 @@ export function subscribeToPluginScreen(listener: () => void): () => void {
 }
 
 function notifyPluginScreenChanged() {
-  pluginScreenVersion += 1;
   for (const listener of pluginScreenListeners) {
     listener();
   }
