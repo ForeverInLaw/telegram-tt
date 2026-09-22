@@ -42,6 +42,12 @@ function createTestUtilSlice() {
     getChat: () => {
       throw new Error('the util slice never reads the store');
     },
+    getCommonBoxChatId: () => {
+      throw new Error('the util slice never reads the store');
+    },
+    getMessage: () => {
+      throw new Error('the util slice never reads the store');
+    },
     getLocalizedString: (key, variables) => `translated:${key}:${JSON.stringify(variables ?? {})}`,
     showNotification: () => {
       throw new Error('the util slice never shows notifications');

@@ -57,6 +57,8 @@ function createTestApiSlice({
     getActiveChatId: () => activeMessageList?.chatId,
     getCurrentUserId: () => '100',
     getChat: (chatId) => (chatIds.includes(chatId) ? ({ id: chatId } as ApiChat) : undefined),
+    getCommonBoxChatId: () => undefined,
+    getMessage: () => undefined,
     getLocalizedString: (key) => `translated:${key}`,
     showNotification: () => {
       throw new Error('the api slice never shows notifications');

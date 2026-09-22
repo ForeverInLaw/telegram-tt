@@ -54,12 +54,23 @@ export function initEventStreams(runtime: TgPluginRuntime) {
             message: update.message,
           });
           break;
-        case 'deleteMessages':
+        case 'deleteMessages': {
+          const isLocal = update.isLocal ?? false;
+          // `deleteScheduledMessages` is a separate update type, so scheduled
+          // cancellations never reach this event by design.
           emitPluginEvent('message:deleted', {
-            chatId: update.chatId,
-            messageIds: update.ids,
+            source: update.source ?? 'delete',
+            items: update.ids.map((messageId) => ({
+              // Common-box updates carry no chatId; the runtime resolves each
+              // id's chat from the store, which still holds the message at
+              // this point of the dispatch.
+              chatId: update.chatId ?? runtime.getCommonBoxChatId(messageId),
+              messageId,
+              isLocal,
+            })),
           });
           break;
+        }
       }
     }),
     runtime.subscribeToStoreChanges(() => {

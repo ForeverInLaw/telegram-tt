@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ApiChat } from '../../api/types';
+import type { ApiChat, ApiMessage } from '../../api/types';
 import type { TgPluginRuntime } from '../runtime';
 
 import { createPluginContext } from '../context';
@@ -14,6 +14,7 @@ type CapturedError = { action: string; error: unknown };
 function createTestStoreSlice() {
   const capturedErrors: CapturedError[] = [];
   const fakeChat = { id: '10' } as ApiChat;
+  const fakeMessage = { id: 20, chatId: '10' } as ApiMessage;
 
   const runtime: TgPluginRuntime = {
     isPluginEnabled: () => true,
@@ -35,6 +36,10 @@ function createTestStoreSlice() {
     getActiveChatId: () => '10',
     getCurrentUserId: () => '100',
     getChat: (chatId) => (chatId === '10' ? fakeChat : undefined),
+    getCommonBoxChatId: () => undefined,
+    getMessage: (chatId, messageId) => (
+      chatId === '10' && messageId === 20 ? fakeMessage : undefined
+    ),
     getLocalizedString: (key) => `translated:${key}`,
     showNotification: () => {
       throw new Error('the store slice never shows notifications');
@@ -48,6 +53,7 @@ function createTestStoreSlice() {
     store: createStoreSlice(context, runtime),
     capturedErrors,
     fakeChat,
+    fakeMessage,
   };
 }
 
@@ -71,6 +77,14 @@ describe('store slice', () => {
     expect(store.getChat('999')).toBeUndefined();
   });
 
+  it('returns stored message data by chat and id', () => {
+    const { store, fakeMessage } = createTestStoreSlice();
+
+    expect(store.getMessage('10', 20)).toBe(fakeMessage);
+    expect(store.getMessage('10', 999)).toBeUndefined();
+    expect(store.getMessage('999', 20)).toBeUndefined();
+  });
+
   it('contains a throwing store read and yields undefined', () => {
     const { store, runtime, capturedErrors } = createTestStoreSlice();
     runtime.getActiveChatId = () => {
@@ -81,5 +95,17 @@ describe('store slice', () => {
 
     expect(capturedErrors).toHaveLength(1);
     expect(capturedErrors[0].action).toBe('store.getActiveChatId');
+  });
+
+  it('contains a throwing getMessage read and yields undefined', () => {
+    const { store, runtime, capturedErrors } = createTestStoreSlice();
+    runtime.getMessage = () => {
+      throw new Error('boom');
+    };
+
+    expect(store.getMessage('10', 20)).toBeUndefined();
+
+    expect(capturedErrors).toHaveLength(1);
+    expect(capturedErrors[0].action).toBe('store.getMessage');
   });
 });

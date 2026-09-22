@@ -111,8 +111,16 @@ const offEdited = tg.on('message:edited', ({ chatId, messageId, message }) => {
   // also a reaction change, a poll vote, a web-page preview, fresh media.
   // `message` carries only the updated fields, so treat it as partial
 });
-const offDeleted = tg.on('message:deleted', ({ chatId, messageIds }) => {
-  // `chatId` is undefined in some source updates — always check before use
+const offDeleted = tg.on('message:deleted', ({ source, items }) => {
+  // `source` tells you why the messages went:
+  //   'delete'       — plain, batch or admin-purge deletions (the default)
+  //   'historyClear' — the whole chat was cleared
+  //   'ttl'          — a self-destruct timer or ephemeral expiry fired
+  // `items` carries one resolved entry per deleted message: `chatId` (the
+  // app resolves common-box deletions itself — check for `undefined` only
+  // for messages the store no longer knows), `messageId`, and `isLocal`
+  // (`true` when this client's own action initiated the deletion).
+  // Scheduled-message cancellation is not a deletion and never fires here.
 });
 const offOpened = tg.on('chat:opened', ({ chatId }) => {
   // `chatId === undefined` means the chat closed
@@ -154,7 +162,10 @@ Read-only plain data — never store handles, so plugin code cannot mutate app s
 const activeChatId = tg.store.getActiveChatId();    // undefined when no chat is open
 const currentUserId = tg.store.getCurrentUserId(); // undefined when signed out
 const chat = tg.store.getChat('12345');            // Readonly<ApiChat>, or undefined
+const message = tg.store.getMessage('12345', 678); // Readonly<ApiMessage>, or undefined
 ```
+
+`getMessage` reads the message store while the message is still in it — inside a `message:deleted` handler (which runs before the app's own reducers remove the message) it returns the soon-to-be-deleted message, letting a plugin snapshot content itself.
 
 ## `tg.util`
 

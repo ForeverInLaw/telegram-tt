@@ -24,5 +24,6 @@ export function createStoreSlice(context: PluginContext, runtime: TgPluginRuntim
     getActiveChatId: () => readContained('getActiveChatId', () => runtime.getActiveChatId()),
     getCurrentUserId: () => readContained('getCurrentUserId', () => runtime.getCurrentUserId()),
     getChat: (chatId) => readContained('getChat', () => runtime.getChat(chatId)),
+    getMessage: (chatId, messageId) => readContained('getMessage', () => runtime.getMessage(chatId, messageId)),
   };
 }

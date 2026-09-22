@@ -141,10 +141,33 @@ export interface TgMessageEditedPayload {
   message: Partial<ApiMessage>;
 }
 
-/** Payload of `message:deleted`: `chatId` is unknown for some chats in the source update. */
-export interface TgMessageDeletedPayload {
+/**
+ * Why the deletion happened. `'delete'` covers plain, batch and admin-purge
+ * deletions; `'historyClear'` is a full chat clear; `'ttl'` is a self-destruct
+ * timer or ephemeral expiry.
+ */
+export type TgDeletionSource = 'delete' | 'historyClear' | 'ttl';
+
+/** One deleted message with the chat the app resolved it to. */
+export interface TgDeletedMessageItem {
+  /** Chat the message belonged to; `undefined` when the store no longer knows it. */
   chatId: string | undefined;
-  messageIds: number[];
+  /** The deleted message's id. */
+  messageId: number;
+  /** `true` when this client's own action initiated the deletion; server-driven deletions are `false`. */
+  isLocal: boolean;
+}
+
+/**
+ * Payload of `message:deleted`: the deletion's source plus one resolved item
+ * per deleted message. The app resolves common-box chat ids and marks
+ * locally-initiated deletions itself, so handlers never guess or read the
+ * store mid-handler. Scheduled-message cancellation is not a deletion and
+ * never fires this event.
+ */
+export interface TgMessageDeletedPayload {
+  source: TgDeletionSource;
+  items: TgDeletedMessageItem[];
 }
 
 /** Payload of `chat:opened`: the active chat changed; `undefined` means the chat closed. */
@@ -215,6 +238,11 @@ export interface TgStoreSlice {
   getCurrentUserId: () => string | undefined;
   /** Chat (or private user) data by id, as a read-only view of the stored object. */
   getChat: (chatId: string) => Readonly<ApiChat> | undefined;
+  /**
+   * Message data by chat and id, as a read-only view of the stored object;
+   * `undefined` once the message is gone from the store.
+   */
+  getMessage: (chatId: string, messageId: number) => Readonly<ApiMessage> | undefined;
 }
 
 /** Utility slice: namespaced logging and the app's localized strings. */

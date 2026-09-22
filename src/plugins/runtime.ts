@@ -9,7 +9,7 @@
 import { addCallback, removeCallback } from '../lib/teact/teactn';
 import { addActionHandler, getActions, getGlobal } from '../global';
 
-import type { ApiChat, ApiUpdate } from '../api/types';
+import type { ApiChat, ApiMessage, ApiUpdate } from '../api/types';
 import type { GlobalActions } from '../global';
 import type { ActionReturnType } from '../global/types';
 import type { MessageList, ThreadId } from '../types';
@@ -71,6 +71,13 @@ export interface TgPluginRuntime {
   getCurrentUserId: () => string | undefined;
   /** Chat (or private user) lookup; returns plain store data. */
   getChat: (chatId: string) => Readonly<ApiChat> | undefined;
+  /**
+   * Resolves the chat a common-box message id (no `chatId` in the update)
+   * belongs to; `undefined` when the store knows no such message.
+   */
+  getCommonBoxChatId: (messageId: number) => string | undefined;
+  /** Message lookup by chat and id; returns plain store data. */
+  getMessage: (chatId: string, messageId: number) => Readonly<ApiMessage> | undefined;
   /** Translates an app lang key with optional substitution variables. */
   getLocalizedString: (key: LangKey, variables?: Record<string, LangVariable>) => string;
   /** Shows an in-app notification through the app's own notification pipeline. */
@@ -151,6 +158,35 @@ export function createPluginRuntime(getTranslationFn: () => LangFn): TgPluginRun
       // vitest jsdom environment does not provide
       const global = getGlobal();
       return global.chats.byId[chatId] || global.users.byId[chatId];
+    },
+    getCommonBoxChatId: (messageId) => {
+      // Inlined `selectCommonBoxChatId` (last-message hint, then a scan of
+      // common-box chats' messages): the selectors module tree runs
+      // `window.matchMedia` at import time, which the vitest jsdom
+      // environment does not provide
+      const global = getGlobal();
+      const isCommonBox = (chat: ApiChat) => (
+        chat.type === 'chatTypePrivate' || chat.type === 'chatTypeBasicGroup'
+      );
+      const fromLastMessage = Object.values(global.chats.byId).find((chat) => (
+        isCommonBox(chat) && global.chats.lastMessageIds.all?.[chat.id] === messageId
+      ));
+      if (fromLastMessage) {
+        return fromLastMessage.id;
+      }
+
+      const { byChatId } = global.messages;
+      return Object.keys(byChatId).find((chatId) => {
+        // `selectChat` checks chats first, then private users
+        const chat = global.chats.byId[chatId] || global.users.byId[chatId];
+        return Boolean(chat && isCommonBox(chat) && byChatId[chatId]?.byId[messageId]);
+      });
+    },
+    getMessage: (chatId, messageId) => {
+      // Inlined `selectChatMessage`: the selectors module tree runs
+      // `window.matchMedia` at import time, which the vitest jsdom
+      // environment does not provide
+      return getGlobal().messages.byChatId?.[chatId]?.byId?.[messageId];
     },
     getLocalizedString: (key, variables) => (getTranslationFn() as unknown as TranslateFn)(key, variables),
     showNotification,
