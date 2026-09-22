@@ -46,10 +46,11 @@
 }
 
 .PluginScreen-body {
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
+  display: flex;
   flex: 1;
+  flex-direction: column;
+
   min-height: 0;
 
   // The screen content manages its own scrolling (the header stays put).
