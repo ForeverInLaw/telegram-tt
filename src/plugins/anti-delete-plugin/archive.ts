@@ -47,10 +47,19 @@ export interface AntiDeleteArchive {
   readCaptures: (chatId: string, options?: AntiDeleteReadOptions) => Promise<AntiDeleteReadPage>;
   /** Lists one chat's captures whose text contains the (case-insensitive) query. */
   searchCaptures: (chatId: string, query: string) => Promise<AntiDeleteSearchPage>;
-  /** Removes every capture record of one chat. */
+  /**
+   * Removes every capture record of one chat, plus the media blobs the
+   * records reference (the blob keys walk beside their records, so a
+   * record-less blob never lingers).
+   */
   clearCaptures: (chatId: string) => Promise<void>;
   /** Number of captured deletions currently stored for one chat. */
   getCaptureCount: (chatId: string) => Promise<number>;
+  /**
+   * Reads one capture's copied media blob; `undefined` when the copy never
+   * succeeded (record-only capture) or the blob was evicted.
+   */
+  getMediaBlob: (key: string) => Promise<Blob | undefined>;
 }
 
 /**
@@ -102,6 +111,12 @@ export function createArchive(tg: TgPluginApi): AntiDeleteArchive {
     do {
       const page = await storage.listRecords<AntiDeleteCaptureRecord>({ prefix, cursor });
 
+      // A capture's media blobs walk beside its record (see `buildMediaKey`),
+      // so clearing the chat drops both; a blob whose record went missing
+      // earlier stays (its key shares the chat prefix, not the record's).
+      await Promise.all(page.items.flatMap(({ record }) => (
+        record.media === undefined ? [] : record.media.map(({ key }) => storage.deleteBlob(key))
+      )));
       await Promise.all(page.items.map(({ key }) => storage.deleteRecord(key)));
       cursor = page.cursor;
     } while (cursor !== undefined);
@@ -120,5 +135,5 @@ export function createArchive(tg: TgPluginApi): AntiDeleteArchive {
     return count;
   }
 
-  return { readCaptures, searchCaptures, clearCaptures, getCaptureCount };
+  return { readCaptures, searchCaptures, clearCaptures, getCaptureCount, getMediaBlob: storage.getBlob };
 }

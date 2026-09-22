@@ -60,6 +60,7 @@ function createTestApiSlice({
     getUser: () => undefined,
     getCommonBoxChatId: () => undefined,
     getMessage: () => undefined,
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key) => `translated:${key}`,
     getStorageEngine: () => {
       throw new Error('the api slice never touches storage');
@@ -77,6 +78,7 @@ function createTestApiSlice({
   return {
     actions,
     api: createApiSlice(context, runtime),
+    runtime,
     actionCalls,
     capturedErrors,
   };
@@ -232,5 +234,35 @@ describe('api facade slice', () => {
 
     expect(capturedErrors).toHaveLength(1);
     expect(capturedErrors[0].action).toBe('api.openChat');
+  });
+
+  it('passes the message media read through to the runtime', async () => {
+    const mediaBlob = new Blob(['bytes']);
+    const { api, runtime } = createTestApiSlice();
+    runtime.fetchMessageMedia = () => Promise.resolve([{
+      kind: 'photo',
+      mimeType: undefined,
+      fileName: undefined,
+      sizeBytes: 5,
+      blob: mediaBlob,
+    }]);
+
+    await expect(api.fetchMessageMedia('10', 20)).resolves.toEqual([{
+      kind: 'photo',
+      mimeType: undefined,
+      fileName: undefined,
+      sizeBytes: 5,
+      blob: mediaBlob,
+    }]);
+  });
+
+  it('resolves [] when the media read rejects, logging with the plugin name', async () => {
+    const { api, runtime, capturedErrors } = createTestApiSlice();
+    runtime.fetchMessageMedia = () => Promise.reject(new Error('media backend down'));
+
+    await expect(api.fetchMessageMedia('10', 20)).resolves.toEqual([]);
+
+    expect(capturedErrors).toHaveLength(1);
+    expect(capturedErrors[0].action).toBe('api.fetchMessageMedia');
   });
 });

@@ -51,6 +51,7 @@ function createTestUtilSlice() {
     getMessage: () => {
       throw new Error('the util slice never reads the store');
     },
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key, variables) => `translated:${key}:${JSON.stringify(variables ?? {})}`,
     getStorageEngine: () => {
       throw new Error('the util slice never touches storage');

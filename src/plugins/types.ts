@@ -245,6 +245,30 @@ export interface TgDeleteMessagesOptions {
 }
 
 /**
+ * One media blob read out of the app's media cache (or freshly downloaded,
+ * for prefetchable kinds). `kind` mirrors the message's media field, so the
+ * caller can pick a rendering strategy without re-inspecting the message.
+ */
+export interface TgMediaBlob {
+  kind: 'photo' | 'gif' | 'sticker' | 'document' | 'video' | 'audio' | 'voice';
+  mimeType: string | undefined;
+  fileName: string | undefined;
+  /** Blob size in bytes; the caller applies its own per-blob cap. */
+  sizeBytes: number;
+  blob: Blob;
+}
+
+/** Options for `tg.api.fetchMessageMedia`. */
+export interface TgFetchMessageMediaOptions {
+  /**
+   * Pass `true` to also fetch a video's bytes while its file reference is
+   * still alive (a real download, not a cache read). Without it, video media
+   * resolves to an empty list unless the bytes are already cached.
+   */
+  shouldPrefetchVideo?: boolean;
+}
+
+/**
  * Action facade: fire-and-forget wrappers over the app's own store actions, so
  * plugins inherit the app's optimistic-update pipeline. Every method is
  * error-contained: a rejected call logs with the plugin name and returns.
@@ -274,6 +298,20 @@ export interface TgApiSlice {
   setReaction: (chatId: string, messageId: number, emoticon: string) => void;
   /** Opens a chat, replacing the currently open message list. */
   openChat: (chatId: string) => void;
+  /**
+   * Reads the message's media blobs out of the app's media cache. Call it
+   * synchronously inside a `message:deleted` handler: the native delete
+   * pipeline unloads the message's cached media a frame later, so the
+   * returned promise must start while the data is still alive. Video bytes
+   * download for real while the file reference lives, and only with
+   * `shouldPrefetchVideo`. Resolves `[]` when nothing is cached (or on any
+   * error — the call is contained, never throws).
+   */
+  fetchMessageMedia: (
+    chatId: string,
+    messageId: number,
+    options?: TgFetchMessageMediaOptions,
+  ) => Promise<TgMediaBlob[]>;
 }
 
 /**

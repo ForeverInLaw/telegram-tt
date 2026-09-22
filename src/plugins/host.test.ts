@@ -39,6 +39,7 @@ function createFakeRuntime(enabledMap: Record<string, boolean> = {}) {
     getUser: () => undefined,
     getCommonBoxChatId: () => undefined,
     getMessage: () => undefined,
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key) => key,
     getStorageEngine: () => Promise.reject(new Error('not exercised')),
     getStorageEngineHandle: () => Promise.reject(new Error('not exercised')),

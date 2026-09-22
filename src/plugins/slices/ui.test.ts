@@ -71,6 +71,7 @@ function createTestUiSlice(pluginName: string) {
     getMessage: () => {
       throw new Error('the ui slice never reads the store');
     },
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: () => {
       throw new Error('the ui slice never translates');
     },

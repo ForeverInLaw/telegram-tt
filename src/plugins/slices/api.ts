@@ -76,6 +76,15 @@ export function createApiSlice(context: PluginContext, runtime: TgPluginRuntime)
     openChat: (chatId) => runContained('openChat', () => {
       runtime.getActions().openChat({ id: chatId, tabId: runtime.getCurrentTabId() });
     }),
+    fetchMessageMedia: (chatId, messageId, options) => (
+      runtime.fetchMessageMedia(chatId, messageId, options)
+        .catch(() => {
+          // Error containment for the media read itself: a plugin's capture
+          // degrades to record-only, never throws.
+          reporter.logError('api.fetchMessageMedia', new Error(`media read failed for ${chatId}:${messageId}`));
+          return [];
+        })
+    ),
   };
 }
 
