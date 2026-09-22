@@ -533,6 +533,13 @@
 "DeletedMessagesEditHistory" = "Edit history";
 "DeletedMessagesEditHistoryCount" = "{count} edits";
 "DeletedMessagesEditHistoryRevision" = "Before edit";
+"DeletedMessagesMediaPhoto" = "Photo";
+"DeletedMessagesMediaGif" = "GIF";
+"DeletedMessagesMediaSticker" = "Sticker";
+"DeletedMessagesMediaDocument" = "File";
+"DeletedMessagesMediaVideo" = "Video";
+"DeletedMessagesMediaAudio" = "Audio";
+"DeletedMessagesMediaVoice" = "Voice message";
 "PrivacyPhone" = "Phone Number";
 "PrivacyLastSeen" = "Last Seen & Online";
 "PrivacyProfilePhoto" = "Profile Photo";

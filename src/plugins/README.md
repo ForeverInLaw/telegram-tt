@@ -176,11 +176,17 @@ tg.api.deleteMessages(chatId, [messageId1, messageId2]);     // always addresses
 tg.api.deleteMessages(chatId, [messageId], { shouldDeleteForAll: true });
 tg.api.setReaction(chatId, messageId, '👍');
 tg.api.openChat(chatId);
+
+// Media bytes of a message, read out of the app's media cache
+const media = await tg.api.fetchMessageMedia(chatId, messageId);
+// media: [{ kind: 'photo', mimeType, fileName, sizeBytes, blob }] | []
+const video = await tg.api.fetchMessageMedia(chatId, messageId, { shouldPrefetchVideo: true });
 ```
 
 - `sendMessage` / `deleteMessages` skip (and log) chats that are not in the store.
 - `editMessage` works only in the currently open chat — the underlying app action edits whatever the open thread's editing state points at, so the facade points that state at `messageId` first; editing another chat is logged and skipped.
-- `setReaction` **toggles**: the same call sets the reaction when the current user has not reacted and removes it when they have.
+- `setReaction` **toggles**: the same call sets the reaction when the current user has not and removes it when they have.
+- `fetchMessageMedia` returns the message's media blobs that are already downloaded (photos, GIFs, stickers, documents, audio, voice). Call it **synchronously inside a `message:deleted` handler** — the returned promise must start while the message and its cached media are still alive, because the native delete pipeline unloads them a frame after the update dispatch. Plain video bytes download for real (while the file reference lives) only with `shouldPrefetchVideo`; without it, a video message resolves `[]`. Any failure resolves `[]` too — the call is contained, never throws. Apply your own size policy to the returned blobs (see `tg.storage.putBlob` for the budgeted write).
 
 ## `tg.store`
 

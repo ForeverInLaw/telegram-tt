@@ -41,6 +41,7 @@ function createTestStoreSlice(fakeUser?: ApiUser) {
     getMessage: (chatId, messageId) => (
       chatId === '10' && messageId === 20 ? fakeMessage : undefined
     ),
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key) => `translated:${key}`,
     getStorageEngine: () => {
       throw new Error('the store slice never touches storage');

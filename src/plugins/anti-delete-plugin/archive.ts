@@ -49,7 +49,11 @@ export interface AntiDeleteArchive {
   readCaptures: (chatId: string, options?: AntiDeleteReadOptions) => Promise<AntiDeleteReadPage>;
   /** Lists one chat's captures whose text contains the (case-insensitive) query. */
   searchCaptures: (chatId: string, query: string) => Promise<AntiDeleteSearchPage>;
-  /** Removes every capture record of one chat. */
+  /**
+   * Removes every capture record of one chat, plus the media blobs the
+   * records reference (the blob keys walk beside their records, so a
+   * record-less blob never lingers).
+   */
   clearCaptures: (chatId: string) => Promise<void>;
   /** Number of captured deletions currently stored for one chat. */
   getCaptureCount: (chatId: string) => Promise<number>;
@@ -58,6 +62,11 @@ export interface AntiDeleteArchive {
    * keys flip the edit date, so ascending storage order runs newest first).
    */
   readRevisions: (chatId: string, messageId: number) => Promise<AntiDeleteRevisionRecord[]>;
+  /**
+   * Reads one capture's copied media blob; `undefined` when the copy never
+   * succeeded (record-only capture) or the blob was evicted.
+   */
+  getMediaBlob: (key: string) => Promise<Blob | undefined>;
 }
 
 /**
@@ -104,8 +113,9 @@ export function createArchive(tg: TgPluginApi): AntiDeleteArchive {
   }
 
   async function clearCaptures(chatId: string): Promise<void> {
-    // Per-chat clear wipes both record kinds: captures and edit revisions
-    await clearRecordsByPrefix(buildCaptureKeyPrefix(chatId));
+    // Per-chat clear wipes both record kinds (captures and edit revisions)
+    // plus the media blobs the capture records reference.
+    await clearCapturesWithMedia(buildCaptureKeyPrefix(chatId));
     await clearRecordsByPrefix(buildRevisionChatKeyPrefix(chatId));
   }
 
@@ -146,5 +156,29 @@ export function createArchive(tg: TgPluginApi): AntiDeleteArchive {
     } while (cursor !== undefined);
   }
 
-  return { readCaptures, searchCaptures, clearCaptures, getCaptureCount, readRevisions };
+  /**
+   * Removes every capture record under one key prefix together with the media
+   * blobs the records reference (see `buildMediaKey`), cursor-paged.
+   */
+  async function clearCapturesWithMedia(prefix: string): Promise<void> {
+    let cursor: string | undefined;
+    do {
+      const page = await storage.listRecords<AntiDeleteCaptureRecord>({ prefix, cursor });
+
+      await Promise.all(page.items.flatMap(({ record }) => (
+        record.media === undefined ? [] : record.media.map(({ key }) => storage.deleteBlob(key))
+      )));
+      await Promise.all(page.items.map(({ key }) => storage.deleteRecord(key)));
+      cursor = page.cursor;
+    } while (cursor !== undefined);
+  }
+
+  return {
+    readCaptures,
+    searchCaptures,
+    clearCaptures,
+    getCaptureCount,
+    readRevisions,
+    getMediaBlob: storage.getBlob,
+  };
 }

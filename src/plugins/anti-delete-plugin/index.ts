@@ -5,6 +5,7 @@ import { definePlugin } from '../types';
 import { createArchive } from './archive';
 import { buildCaptureKey, buildCaptureRecord, isServiceMessage } from './capture';
 import { captureRevisionFromUpdate } from './revisions';
+import { captureMessageMedia } from './mediaCapture';
 import { getSettings, loadSettings, resetSettings } from './settings';
 import { registerSettingsPanelGlue } from './registerPanel';
 import { createArchiveViewerScreen } from './viewer';
@@ -114,9 +115,17 @@ function captureDeletedMessages(tg: TgPluginApi, payload: TgMessageDeletedPayloa
 
     // The write is async by contract; the slice contains backend errors, and
     // this catch guards the chain itself so a throw never reaches the host
-    void tg.storage.putRecord(buildCaptureKey(item.chatId, item.messageId), record).catch((err) => {
+    const recordWrite = tg.storage.putRecord(
+      buildCaptureKey(item.chatId, item.messageId),
+      record,
+    ).catch((err) => {
       tg.util.log('capture persist failed', err);
     });
+
+    // Media copy, kicked synchronously (void — the record never waits for
+    // it): the underlying cache read must start while the message's media
+    // is still alive, before the native delete pipeline unloads it.
+    captureMessageMedia(tg, record, recordWrite);
   }
 }
 

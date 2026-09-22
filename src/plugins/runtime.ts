@@ -16,7 +16,7 @@ import type { MessageList, ThreadId } from '../types';
 import type { LangKey, LangVariable } from '../types/language';
 import type { LangFn } from '../util/localization';
 import type { TgStorageEngine, TgStorageEngineHandle } from './storageEngine';
-import type { TgUiNotification } from './types';
+import type { TgMediaBlob, TgUiNotification } from './types';
 import { MAIN_THREAD_ID } from '../api/types';
 
 import { getCurrentTabId } from '../util/establishMultitabRole';
@@ -91,6 +91,16 @@ export interface TgPluginRuntime {
   getCommonBoxChatId: (messageId: number) => string | undefined;
   /** Message lookup by chat and id; returns plain store data. */
   getMessage: (chatId: string, messageId: number) => Readonly<ApiMessage> | undefined;
+  /**
+   * Reads a message's media blobs out of the app's media cache (downloading
+   * video bytes for real while the file reference lives). The production
+   * impl lives in `fetchMessageMediaFromApp` below; tests inject a fake.
+   */
+  fetchMessageMedia: (
+    chatId: string,
+    messageId: number,
+    options?: { shouldPrefetchVideo?: boolean },
+  ) => Promise<TgMediaBlob[]>;
   /** Translates an app lang key with optional substitution variables. */
   getLocalizedString: (key: LangKey, variables?: Record<string, LangVariable>) => string;
   /** Shows an in-app notification through the app's own notification pipeline. */
@@ -215,6 +225,9 @@ export function createPluginRuntime(getTranslationFn: () => LangFn): TgPluginRun
       // environment does not provide
       return getGlobal().messages.byChatId?.[chatId]?.byId?.[messageId];
     },
+    fetchMessageMedia: (chatId, messageId, options) => (
+      fetchMessageMediaFromApp(chatId, messageId, options?.shouldPrefetchVideo ?? false)
+    ),
     getLocalizedString: (key, variables) => (getTranslationFn() as unknown as TranslateFn)(key, variables),
     showNotification,
     getStorageEngine: () => {
@@ -277,4 +290,90 @@ function readActiveMessageList(): MessageList | undefined {
   // `window.matchMedia` at import time, which the vitest jsdom environment
   // does not provide.
   return getGlobal().byTabId?.[getCurrentTabId()]?.messageLists.at(-1);
+}
+
+// --- Media capture service ------------------------------------------------------
+
+// The native bridge (`mediaCaptureNative`) statically imports the app's
+// media helpers, whose module trees run browser-only side effects at import
+// time (`window.matchMedia`, service-worker setup) that the vitest jsdom
+// environment cannot provide. The import is dynamic for exactly that reason:
+// the bridge must not load until the first real capture call, or every jsdom
+// suite importing this module would break.
+let mediaCaptureBridgePromise: Promise<typeof import('./mediaCaptureNative')> | undefined;
+
+function loadMediaCaptureNative(): Promise<typeof import('./mediaCaptureNative')> {
+  mediaCaptureBridgePromise ??= import('./mediaCaptureNative');
+  return mediaCaptureBridgePromise;
+}
+
+/**
+ * Reads one message's already-downloaded media blobs out of the app's media
+ * cache, so a plugin can copy them before the delete pipeline unloads them.
+ * Video bytes download for real (while the file reference is still alive)
+ * only with `shouldPrefetchVideo`. A message without captureable media, or
+ * any failure, resolves `[]` — the caller degrades to a record-only capture.
+ */
+async function fetchMessageMediaFromApp(
+  chatId: string,
+  messageId: number,
+  shouldPrefetchVideo: boolean,
+): Promise<TgMediaBlob[]> {
+  const message = getGlobal().messages.byChatId?.[chatId]?.byId?.[messageId];
+  if (message === undefined) return [];
+
+  const media = pickMessageMedia(message, shouldPrefetchVideo);
+  if (media === undefined) return [];
+
+  try {
+    const bridge = await loadMediaCaptureNative();
+    const blob = await bridge.fetchMessageMediaBlob(message, media.kind, shouldPrefetchVideo);
+    if (blob === undefined) return [];
+
+    return [{
+      kind: media.kind,
+      mimeType: media.mimeType,
+      fileName: media.fileName,
+      sizeBytes: blob.size,
+      blob,
+    }];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The message's primary media descriptor, or `undefined` for kinds this
+ * service does not capture (webPage/poll/etc.) and for plain videos while
+ * prefetch is off (the progressive cache never holds the full bytes).
+ */
+function pickMessageMedia(
+  message: Readonly<ApiMessage>,
+  shouldPrefetchVideo: boolean,
+): { kind: TgMediaBlob['kind']; mimeType: string | undefined; fileName: string | undefined } | undefined {
+  const { content } = message;
+
+  if (content.photo) {
+    return { kind: 'photo', mimeType: undefined, fileName: undefined };
+  }
+  if (content.video) {
+    // A GIF is a video document; the viewer renders it inline like a photo
+    const kind = content.video.isGif ? 'gif' : 'video';
+    if (kind === 'video' && !shouldPrefetchVideo) return undefined;
+    return { kind, mimeType: content.video.mimeType, fileName: content.video.fileName };
+  }
+  if (content.sticker) {
+    return { kind: 'sticker', mimeType: undefined, fileName: undefined };
+  }
+  if (content.document) {
+    return { kind: 'document', mimeType: content.document.mimeType, fileName: content.document.fileName };
+  }
+  if (content.audio) {
+    return { kind: 'audio', mimeType: content.audio.mimeType, fileName: content.audio.fileName };
+  }
+  if (content.voice) {
+    return { kind: 'voice', mimeType: undefined, fileName: undefined };
+  }
+
+  return undefined;
 }

@@ -1,7 +1,7 @@
 import type { TgDeletionSource, TgEventPayloads } from '../types';
 
 /** Version of the capture record layout; a bump is a forward migration. */
-export const CAPTURE_SCHEMA_VERSION = 1;
+export const CAPTURE_SCHEMA_VERSION = 2;
 
 /**
  * The message shape the store slice returns, reached through the contract
@@ -51,10 +51,30 @@ export interface AntiDeleteCaptureRecord {
   /** The message's formatted text, when it had one. */
   text: AntiDeleteFormattedText | undefined;
   content: AntiDeleteContentSummary;
+  /**
+   * Blobs copied into the plugin's own storage at capture time. `undefined`
+   * (or absent) on records written before media capture, and after a blob
+   * failed to store or was never present — a record-only capture.
+   */
+  media: AntiDeleteMediaRef[] | undefined;
   /** Why the message went: plain/admin delete, chat clear or a self-destruct timer. */
   source: TgDeletionSource;
   /** Unix timestamp of the capture (the moment the deletion arrived). */
   capturedAt: number;
+}
+
+/**
+ * A media blob the capture copied into its own storage: the plugin-storage
+ * key plus the descriptors the viewer renders without reading the blob.
+ * `isEvicted` at read time comes from the storage, never from this ref.
+ */
+export interface AntiDeleteMediaRef {
+  /** Plugin-storage key of the copied blob (`buildMediaKey`). */
+  key: string;
+  /** The media kind, mirroring `TgMediaBlob['kind']`. */
+  kind: 'photo' | 'gif' | 'sticker' | 'document' | 'video' | 'audio' | 'voice';
+  /** Blob size in bytes at copy time. */
+  sizeBytes: number;
 }
 
 /**
@@ -79,6 +99,22 @@ export function buildCaptureKey(chatId: string, messageId: number): string {
 }
 
 /**
+ * Builds one copied media blob's storage key:
+ * `media:<chatId>:<flipped message id>:<kind>`. The flip keeps the media
+ * keys walking newest-first beside their capture record, and the kind
+ * suffix keeps one key per captureable media item (a message carries at most
+ * one primary media kind).
+ */
+export function buildMediaKey(
+  chatId: string,
+  messageId: number,
+  kind: AntiDeleteMediaRef['kind'],
+): string {
+  const flippedId = String(KEY_FLIP_BASE - messageId).padStart(KEY_ID_WIDTH, '0');
+  return `media:${chatId}:${flippedId}:${kind}`;
+}
+
+/**
  * Snapshots the still-intact message into a plain record. Runs synchronously
  * inside the deletion handler, before the native delete pipeline removes the
  * message from the store.
@@ -99,6 +135,9 @@ export function buildCaptureRecord(
     date: message.date,
     text: text === undefined ? undefined : { text: text.text, entities: text.entities },
     content: summarizeContent(message.content),
+    // The async media copy fills this in after the record lands; a capture
+    // starts record-only, so the field is written empty-handed.
+    media: undefined,
     source,
     capturedAt: Date.now(),
   };

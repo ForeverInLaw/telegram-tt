@@ -469,6 +469,13 @@ export interface LangPair {
   'DeletedMessagesMediaPlaceholder': undefined;
   'DeletedMessagesEditHistory': undefined;
   'DeletedMessagesEditHistoryRevision': undefined;
+  'DeletedMessagesMediaPhoto': undefined;
+  'DeletedMessagesMediaGif': undefined;
+  'DeletedMessagesMediaSticker': undefined;
+  'DeletedMessagesMediaDocument': undefined;
+  'DeletedMessagesMediaVideo': undefined;
+  'DeletedMessagesMediaAudio': undefined;
+  'DeletedMessagesMediaVoice': undefined;
   'PrivacyPhone': undefined;
   'PrivacyLastSeen': undefined;
   'PrivacyProfilePhoto': undefined;

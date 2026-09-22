@@ -122,6 +122,7 @@ function createTestHarness() {
     getUser: (userId) => users.get(userId),
     getCommonBoxChatId: () => undefined,
     getMessage: (chatId, messageId) => messages.get(`${chatId}:${messageId}`),
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key) => key,
     getStorageEngine: () => Promise.resolve(engine),
     getStorageEngineHandle: () => Promise.resolve(engine),
@@ -209,7 +210,7 @@ describe('anti-delete plugin: capture round-trip', () => {
     expect(page.captures).toHaveLength(1);
 
     const capture = page.captures[0];
-    expect(capture.schemaVersion).toBe(1);
+    expect(capture.schemaVersion).toBe(2);
     expect(capture.chatId).toBe(TEST_CHAT_ID);
     expect(capture.messageId).toBe(501);
     expect(capture.senderId).toBe('2');
@@ -538,6 +539,7 @@ describe('anti-delete plugin: host lifecycle (disable / re-enable)', () => {
       getUser: (userId) => users.get(userId),
       getCommonBoxChatId: () => undefined,
       getMessage: (chatId, messageId) => messages.get(`${chatId}:${messageId}`),
+      fetchMessageMedia: () => Promise.resolve([]),
       getLocalizedString: (key) => key,
       getStorageEngine: () => Promise.resolve(engine),
       getStorageEngineHandle: () => Promise.resolve(engine),

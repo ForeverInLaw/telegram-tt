@@ -153,6 +153,22 @@
   opacity: 0.8;
 }
 
+.mediaSize {
+  margin-left: auto;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.mediaImage {
+  display: block;
+  max-width: 100%;
+  max-height: 24rem;
+  border-radius: 0.25rem;
+  object-fit: contain;
+
+  margin: 0.25rem 0;
+}
+
 .rowFooter {
   display: flex;
   justify-content: space-between;

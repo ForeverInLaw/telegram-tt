@@ -61,6 +61,7 @@ function createFakeRuntime(activeChatId?: string, commonBoxChatIdsByMessageId: R
     getUser: () => undefined,
     getCommonBoxChatId: (messageId) => commonBoxChatIdsByMessageId[messageId],
     getMessage: () => undefined,
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key) => key,
     getStorageEngine: () => Promise.reject(new Error('not exercised')),
     getStorageEngineHandle: () => Promise.reject(new Error('not exercised')),

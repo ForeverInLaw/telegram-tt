@@ -58,6 +58,7 @@ function createTestTg(storage: TgPluginApi['storage']): TgPluginApi {
     getUser: () => undefined,
     getCommonBoxChatId: () => undefined,
     getMessage: () => undefined,
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key) => key,
     getStorageEngine: () => {
       throw new Error('settings tests use the fake slice directly');

@@ -4,12 +4,14 @@ import {
 } from '../../lib/teact/teact';
 
 import type { TgPluginApi, TgTeactNode } from '../types';
-import type { AntiDeleteArchive } from './archive';
-import type { AntiDeleteCaptureRecord } from './capture';
+import type { AntiDeleteArchive, AntiDeleteReadPage, AntiDeleteSearchPage } from './archive';
+import type { AntiDeleteCaptureRecord, AntiDeleteMediaRef } from './capture';
 import type { AntiDeleteRevisionRecord } from './revisions';
 
 import { copyTextToClipboard } from '../../util/clipboard';
 import { formatDateToString } from '../../util/dates/oldDateFormat';
+
+import { formatMediaSize, isInlineMediaKind, resolveMediaResolution } from './mediaCapture';
 
 import styles from './viewer.module.scss';
 
@@ -36,12 +38,113 @@ type OwnProps = {
   localize: (key: ViewerLangKey, variables?: ViewerLangVariables) => string;
 };
 
+type MediaRowState =
+  | { status: 'loading' }
+  | { status: 'placeholder'; reason: 'neverCaptured' | 'evicted' }
+  | { status: 'inline'; objectUrl: string; kind: 'photo' | 'gif' }
+  | { status: 'chip'; kind: 'sticker' | 'document' | 'video' | 'audio' | 'voice'; sizeBytes: number; fileName: string | undefined };
+
+/** Lang keys for the media chips' kind labels. */
+const MEDIA_KIND_LANG_KEYS: Record<AntiDeleteMediaRef['kind'], 'DeletedMessagesMediaPhoto'
+  | 'DeletedMessagesMediaGif' | 'DeletedMessagesMediaSticker' | 'DeletedMessagesMediaDocument'
+  | 'DeletedMessagesMediaVideo' | 'DeletedMessagesMediaAudio' | 'DeletedMessagesMediaVoice'> = {
+  photo: 'DeletedMessagesMediaPhoto',
+  gif: 'DeletedMessagesMediaGif',
+  sticker: 'DeletedMessagesMediaSticker',
+  document: 'DeletedMessagesMediaDocument',
+  video: 'DeletedMessagesMediaVideo',
+  audio: 'DeletedMessagesMediaAudio',
+  voice: 'DeletedMessagesMediaVoice',
+};
+
+type MediaProps = {
+  capture: AntiDeleteCaptureRecord;
+  archive: AntiDeleteArchive;
+  localize: (key: ViewerLangKey) => string;
+};
+
+/**
+ * One capture's media area: the copied blob renders inline (photos, GIFs) or
+ * as a file chip; a record-only or evicted capture renders the placeholder.
+ * The object URL is revoked on unmount, so rows never leak blob handles.
+ */
+const CaptureMedia: FC<MediaProps> = ({ capture, archive, localize }) => {
+  const [state, setState] = useState<MediaRowState>({ status: 'loading' });
+  const objectUrlRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    let isCancelled = false;
+
+    void resolveMediaResolution(archive.getMediaBlob, capture).then((resolution) => {
+      if (isCancelled) return;
+
+      if (resolution.status === 'placeholder') {
+        setState({ status: 'placeholder', reason: resolution.reason });
+        return;
+      }
+
+      if (isInlineMediaKind(resolution.kind)) {
+        const objectUrl = URL.createObjectURL(resolution.blob);
+        objectUrlRef.current = objectUrl;
+        setState({ status: 'inline', objectUrl, kind: resolution.kind });
+        return;
+      }
+
+      setState({
+        status: 'chip',
+        kind: resolution.kind,
+        sizeBytes: resolution.sizeBytes,
+        fileName: capture.content.fileName,
+      });
+    }).catch(() => {
+      if (!isCancelled) setState({ status: 'placeholder', reason: 'evicted' });
+    });
+
+    return () => {
+      isCancelled = true;
+      if (objectUrlRef.current !== undefined) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = undefined;
+      }
+    };
+  }, [archive, capture]);
+
+  if (state.status === 'loading') {
+    return <div className={styles.media} aria-busy />;
+  }
+
+  if (state.status === 'placeholder') {
+    return (
+      <div className={styles.media}>
+        <span className={styles.mediaIcon} aria-hidden="true">▣</span>
+        <span dir="auto">{localize('DeletedMessagesMediaPlaceholder')}</span>
+        <span className={styles.mediaType}>{capture.content.type}</span>
+      </div>
+    );
+  }
+
+  if (state.status === 'inline') {
+    return <img className={styles.mediaImage} src={state.objectUrl} alt="" dir="auto" />;
+  }
+
+  return (
+    <div className={styles.media}>
+      <span className={styles.mediaIcon} aria-hidden="true">▤</span>
+      <span dir="auto">
+        {localize(MEDIA_KIND_LANG_KEYS[state.kind])}
+        {state.fileName !== undefined ? ` — ${state.fileName}` : ''}
+      </span>
+      <span className={styles.mediaSize}>{formatMediaSize(state.sizeBytes)}</span>
+    </div>
+  );
+};
+
 /**
  * The archive viewer rendered through `tg.ui.openScreen`: one chat's captured
  * deletions, newest first, with cursor paging into older captures, text
- * search, text copy and a per-chat clear behind a confirmation. Media
- * captures render as a placeholder in this ticket. The markup is plain DOM:
- * plugin code stays within the plugin-safe import set.
+ * search, text copy and a per-chat clear behind a confirmation. Captured
+ * media renders inline (photos, GIFs) or as a chip, with the placeholder for
+ * record-only and evicted captures. The markup is plain DOM: plugin code
+ * stays within the plugin-safe import set.
  */
 const ArchiveViewer: FC<OwnProps> = ({ archive, chatId, localize }) => {
   const [captures, setCaptures] = useState<AntiDeleteCaptureRecord[] | undefined>(undefined);
@@ -64,7 +167,7 @@ const ArchiveViewer: FC<OwnProps> = ({ archive, chatId, localize }) => {
     let isCancelled = false;
     isLoadingRef.current = true;
 
-    const firstPage = isInSearch
+    const firstPage: Promise<AntiDeleteReadPage | AntiDeleteSearchPage> = isInSearch
       ? archive.searchCaptures(chatId, searchQuery)
       : archive.readCaptures(chatId, { limit: PAGE_LIMIT });
 
@@ -154,7 +257,7 @@ const ArchiveViewer: FC<OwnProps> = ({ archive, chatId, localize }) => {
           </div>
         )}
         {captures?.map((capture) => (
-          renderCaptureRow(archive, capture, localize, copiedMessageIds, handleCopy)
+          renderCaptureRow(capture, localize, copiedMessageIds, handleCopy, archive)
         ))}
       </div>
       {isClearConfirmShown && (
@@ -253,11 +356,11 @@ const SOURCE_LANG_KEYS: Record<AntiDeleteCaptureRecord['source'], 'DeletedMessag
 };
 
 function renderCaptureRow(
-  archive: AntiDeleteArchive,
   capture: AntiDeleteCaptureRecord,
   localize: (key: ViewerLangKey, variables?: ViewerLangVariables) => string,
   copiedMessageIds: number[],
   onCopy: (capture: AntiDeleteCaptureRecord) => void,
+  archive: AntiDeleteArchive,
 ) {
   const isCopied = copiedMessageIds.includes(capture.messageId);
   const text = capture.text?.text ?? '';
@@ -274,11 +377,7 @@ function renderCaptureRow(
       </div>
       {text.length > 0 && <div className={styles.text} dir="auto">{text}</div>}
       {capture.content.type !== 'text' && (
-        <div className={styles.media}>
-          <span className={styles.mediaIcon} aria-hidden="true">▣</span>
-          <span dir="auto">{localize('DeletedMessagesMediaPlaceholder')}</span>
-          <span className={styles.mediaType}>{capture.content.type}</span>
-        </div>
+        <CaptureMedia capture={capture} archive={archive} localize={localize} />
       )}
       <div className={styles.rowFooter}>
         <RevisionExpander archive={archive} capture={capture} localize={localize} />
