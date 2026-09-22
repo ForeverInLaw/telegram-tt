@@ -87,6 +87,7 @@ function createTestSlice(engine: TgStorageEngine | undefined) {
     getActiveChatId: () => undefined,
     getCurrentUserId: () => undefined,
     getChat: () => undefined,
+    getUser: () => undefined,
     getLocalizedString: (key) => key,
     getStorageEngine: () => (engine ? Promise.resolve(engine) : Promise.reject(new Error('no engine'))),
     getStorageEngineHandle: () => {

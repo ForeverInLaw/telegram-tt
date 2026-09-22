@@ -57,6 +57,7 @@ function createTestApiSlice({
     getActiveChatId: () => activeMessageList?.chatId,
     getCurrentUserId: () => '100',
     getChat: (chatId) => (chatIds.includes(chatId) ? ({ id: chatId } as ApiChat) : undefined),
+    getUser: () => undefined,
     getCommonBoxChatId: () => undefined,
     getMessage: () => undefined,
     getLocalizedString: (key) => `translated:${key}`,

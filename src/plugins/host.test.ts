@@ -36,6 +36,7 @@ function createFakeRuntime(enabledMap: Record<string, boolean> = {}) {
     getActiveChatId: () => undefined,
     getCurrentUserId: () => undefined,
     getChat: () => undefined,
+    getUser: () => undefined,
     getCommonBoxChatId: () => undefined,
     getMessage: () => undefined,
     getLocalizedString: (key) => key,

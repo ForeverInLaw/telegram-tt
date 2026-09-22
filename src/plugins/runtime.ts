@@ -9,7 +9,7 @@
 import { addCallback, removeCallback } from '../lib/teact/teactn';
 import { addActionHandler, getActions, getGlobal } from '../global';
 
-import type { ApiChat, ApiMessage, ApiUpdate } from '../api/types';
+import type { ApiChat, ApiMessage, ApiUpdate, ApiUser } from '../api/types';
 import type { GlobalActions } from '../global';
 import type { ActionReturnType } from '../global/types';
 import type { MessageList, ThreadId } from '../types';
@@ -79,6 +79,11 @@ export interface TgPluginRuntime {
   getCurrentUserId: () => string | undefined;
   /** Chat (or private user) lookup; returns plain store data. */
   getChat: (chatId: string) => Readonly<ApiChat> | undefined;
+  /**
+   * User lookup (the `ApiUser` record behind a private chat's peer);
+   * returns plain store data.
+   */
+  getUser: (userId: string) => Readonly<ApiUser> | undefined;
   /**
    * Resolves the chat a common-box message id (no `chatId` in the update)
    * belongs to; `undefined` when the store knows no such message.
@@ -174,6 +179,12 @@ export function createPluginRuntime(getTranslationFn: () => LangFn): TgPluginRun
       // vitest jsdom environment does not provide
       const global = getGlobal();
       return global.chats.byId[chatId] || global.users.byId[chatId];
+    },
+    getUser: (userId) => {
+      // Inlined `selectUser`: the selectors module tree runs
+      // `window.matchMedia` at import time, which the vitest jsdom
+      // environment does not provide
+      return getGlobal().users.byId[userId];
     },
     getCommonBoxChatId: (messageId) => {
       // Inlined `selectCommonBoxChatId` (last-message hint, then a scan of
