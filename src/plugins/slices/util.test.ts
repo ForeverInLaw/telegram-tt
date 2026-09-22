@@ -49,6 +49,12 @@ function createTestUtilSlice() {
       throw new Error('the util slice never reads the store');
     },
     getLocalizedString: (key, variables) => `translated:${key}:${JSON.stringify(variables ?? {})}`,
+    getStorageEngine: () => {
+      throw new Error('the util slice never touches storage');
+    },
+    getStorageEngineHandle: () => {
+      throw new Error('the util slice never touches storage');
+    },
     showNotification: () => {
       throw new Error('the util slice never shows notifications');
     },

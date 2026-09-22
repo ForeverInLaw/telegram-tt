@@ -41,6 +41,12 @@ function createTestStoreSlice() {
       chatId === '10' && messageId === 20 ? fakeMessage : undefined
     ),
     getLocalizedString: (key) => `translated:${key}`,
+    getStorageEngine: () => {
+      throw new Error('the store slice never touches storage');
+    },
+    getStorageEngineHandle: () => {
+      throw new Error('the store slice never touches storage');
+    },
     showNotification: () => {
       throw new Error('the store slice never shows notifications');
     },

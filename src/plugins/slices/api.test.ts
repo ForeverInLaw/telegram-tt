@@ -60,6 +60,12 @@ function createTestApiSlice({
     getCommonBoxChatId: () => undefined,
     getMessage: () => undefined,
     getLocalizedString: (key) => `translated:${key}`,
+    getStorageEngine: () => {
+      throw new Error('the api slice never touches storage');
+    },
+    getStorageEngineHandle: () => {
+      throw new Error('the api slice never touches storage');
+    },
     showNotification: () => {
       throw new Error('the api slice never shows notifications');
     },

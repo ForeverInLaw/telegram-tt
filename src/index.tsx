@@ -36,9 +36,12 @@ import App from './components/App';
 import './assets/fonts/roboto.css';
 import './styles/index.scss';
 
-// Plugins are loaded synchronously before the app boots. The translation fn is
+// Top-level await: the entry module is async, so its importers wait on it.
+// The storage engine init (IndexedDB open, quota estimate, schema check) is
+// the only potentially slow part of plugin init; it must complete before any
+// plugin writes, so awaiting here is the exact seam. The translation fn is
 // injected because the plugin layer must not import its module directly.
-initPlugins(createPluginRuntime(getTranslationFn));
+await initPlugins(createPluginRuntime(getTranslationFn));
 
 if (STRICTERDOM_ENABLED) {
   enableStrict();

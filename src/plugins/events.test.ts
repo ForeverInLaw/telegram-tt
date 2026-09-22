@@ -61,6 +61,8 @@ function createFakeRuntime(activeChatId?: string, commonBoxChatIdsByMessageId: R
     getCommonBoxChatId: (messageId) => commonBoxChatIdsByMessageId[messageId],
     getMessage: () => undefined,
     getLocalizedString: (key) => key,
+    getStorageEngine: () => Promise.reject(new Error('not exercised')),
+    getStorageEngineHandle: () => Promise.reject(new Error('not exercised')),
     createPluginReporter: (pluginName) => ({
       log: () => {},
       logError: (action, error) => {
