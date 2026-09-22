@@ -103,8 +103,13 @@ export async function resolveMediaResolution(
   return { status: 'available', kind: firstRef.kind, sizeBytes: firstRef.sizeBytes, blob };
 }
 
-/** The viewer's inline-render kinds (object-URL `<img>`); the rest render chips. */
-export const INLINE_MEDIA_KINDS: readonly AntiDeleteMediaRef['kind'][] = ['photo', 'gif'];
+/**
+ * The viewer's inline-render kinds (object-URL `<img>`); the rest render
+ * chips. A type guard, so the render switch narrows the kind union.
+ */
+export function isInlineMediaKind(kind: AntiDeleteMediaRef['kind']): kind is 'photo' | 'gif' {
+  return kind === 'photo' || kind === 'gif';
+}
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB'];
 

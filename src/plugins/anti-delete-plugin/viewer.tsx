@@ -4,13 +4,13 @@ import {
 } from '../../lib/teact/teact';
 
 import type { TgPluginApi, TgTeactNode } from '../types';
-import type { AntiDeleteArchive } from './archive';
+import type { AntiDeleteArchive, AntiDeleteReadPage, AntiDeleteSearchPage } from './archive';
 import type { AntiDeleteCaptureRecord, AntiDeleteMediaRef } from './capture';
 
 import { copyTextToClipboard } from '../../util/clipboard';
 import { formatDateToString } from '../../util/dates/oldDateFormat';
 
-import { formatMediaSize, INLINE_MEDIA_KINDS, resolveMediaResolution } from './mediaCapture';
+import { formatMediaSize, isInlineMediaKind, resolveMediaResolution } from './mediaCapture';
 
 import styles from './viewer.module.scss';
 
@@ -80,7 +80,7 @@ const CaptureMedia: FC<MediaProps> = ({ capture, archive, localize }) => {
         return;
       }
 
-      if (INLINE_MEDIA_KINDS.includes(resolution.kind)) {
+      if (isInlineMediaKind(resolution.kind)) {
         const objectUrl = URL.createObjectURL(resolution.blob);
         objectUrlRef.current = objectUrl;
         setState({ status: 'inline', objectUrl, kind: resolution.kind });
@@ -165,7 +165,7 @@ const ArchiveViewer: FC<OwnProps> = ({ archive, chatId, localize }) => {
     let isCancelled = false;
     isLoadingRef.current = true;
 
-    const firstPage = isInSearch
+    const firstPage: Promise<AntiDeleteReadPage | AntiDeleteSearchPage> = isInSearch
       ? archive.searchCaptures(chatId, searchQuery)
       : archive.readCaptures(chatId, { limit: PAGE_LIMIT });
 
