@@ -15,16 +15,24 @@ import type { ActionReturnType } from '../global/types';
 import type { MessageList, ThreadId } from '../types';
 import type { LangKey, LangVariable } from '../types/language';
 import type { LangFn } from '../util/localization';
+import type { TgStorageEngine, TgStorageEngineHandle } from './storageEngine';
 import type { TgUiNotification } from './types';
 import { MAIN_THREAD_ID } from '../api/types';
 
 import { getCurrentTabId } from '../util/establishMultitabRole';
 import { LOG_PREFIX, LOG_STYLE } from './logConstants';
+import { createDefaultServices, createStorageEngine } from './storageEngine';
 
 const STORAGE_KEY = 'tt-plugins';
 const PLUGIN_NOTIFICATION_LOCAL_ID_PREFIX = 'plugin-notification-';
 
 type PluginEnabledMap = Record<string, boolean>;
+
+// The account-scoped storage engine is built once per runtime (app boot), not
+// per plugin, so usage accounting and the eviction index are shared. It is
+// created lazily on first use, so merely importing this module never touches
+// IndexedDB/OPFS (tests import it in jsdom).
+let storageEnginePromise: Promise<TgStorageEngine> | undefined;
 
 /** The app store actions the action facade dispatches through. */
 export type TgPluginActions = Pick<
@@ -75,6 +83,14 @@ export interface TgPluginRuntime {
   getLocalizedString: (key: LangKey, variables?: Record<string, LangVariable>) => string;
   /** Shows an in-app notification through the app's own notification pipeline. */
   showNotification: (notification: TgUiNotification) => void;
+  /**
+   * The account-scoped budgeted storage engine shared by every plugin's
+   * `tg.storage` slice; rejects when the engine failed to start. The engine
+   * outlives plugins: it is created once at host startup, not per plugin.
+   */
+  getStorageEngine: () => Promise<TgStorageEngine>;
+  /** Engine-scoped config (budget, per-blob cap) for the plugin settings UI. */
+  getStorageEngineHandle: () => Promise<TgStorageEngineHandle>;
 }
 
 function loadEnabledMap(): PluginEnabledMap {
@@ -115,7 +131,7 @@ function createReporter(pluginName: string): TgPluginReporter {
  * plugin tests (the same reason the store reads below are inlined).
  */
 export function createPluginRuntime(getTranslationFn: () => LangFn): TgPluginRuntime {
-  return {
+  const runtime: TgPluginRuntime = {
     isPluginEnabled: (pluginName, isEnabledByDefault) => loadEnabledMap()[pluginName] ?? isEnabledByDefault,
     setPluginEnabled: (pluginName, isEnabled) => {
       const enabledMap = loadEnabledMap();
@@ -154,7 +170,21 @@ export function createPluginRuntime(getTranslationFn: () => LangFn): TgPluginRun
     },
     getLocalizedString: (key, variables) => (getTranslationFn() as unknown as TranslateFn)(key, variables),
     showNotification,
+    getStorageEngine: () => {
+      storageEnginePromise ??= createStorageEngine(createDefaultServices());
+      return storageEnginePromise;
+    },
+    getStorageEngineHandle: async () => {
+      const engine = await runtime.getStorageEngine();
+      return {
+        setBudgetBytes: engine.setBudgetBytes,
+        setPerBlobCapBytes: engine.setPerBlobCapBytes,
+        getUsage: engine.getUsage,
+      };
+    },
   };
+
+  return runtime;
 }
 
 // --- Notification service -----------------------------------------------------

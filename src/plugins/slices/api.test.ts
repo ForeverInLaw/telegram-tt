@@ -58,6 +58,12 @@ function createTestApiSlice({
     getCurrentUserId: () => '100',
     getChat: (chatId) => (chatIds.includes(chatId) ? ({ id: chatId } as ApiChat) : undefined),
     getLocalizedString: (key) => `translated:${key}`,
+    getStorageEngine: () => {
+      throw new Error('the api slice never touches storage');
+    },
+    getStorageEngineHandle: () => {
+      throw new Error('the api slice never touches storage');
+    },
     showNotification: () => {
       throw new Error('the api slice never shows notifications');
     },

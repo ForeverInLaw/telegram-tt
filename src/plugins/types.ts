@@ -52,6 +52,12 @@ export interface TgPluginApi {
   store: TgStoreSlice;
   /** Per-plugin logging and the app's localized strings. */
   util: TgUtilSlice;
+  /**
+   * Per-plugin persistent storage with a quota-aware budget: JSON records in
+   * IndexedDB, binary blobs in OPFS, each scoped per plugin and per account
+   * — one plugin cannot read another's data, and accounts never mix.
+   */
+  storage: TgStorageSlice;
 }
 
 export interface TgPlugin {
@@ -230,4 +236,86 @@ export interface TgUtilSlice {
    * fails.
    */
   getLocalizedString: (key: LangKey, variables?: Record<string, LangVariable>) => string;
+}
+
+// --- tg.storage ----------------------------------------------------------------
+//
+// A budgeted storage engine exposed to every plugin as a contract slice (see
+// src/plugins/storageEngine.ts). Keys are namespaced per calling plugin and
+// scoped per account slot, so plugins and accounts never see each other's
+// data. Records are small JSON values kept in IndexedDB and are never evicted;
+// blobs are binary values kept in OPFS under a shared budget — writing past
+// the budget evicts the oldest captured blobs first.
+
+/** Result of `tg.storage.putBlob`. */
+export interface TgBlobPutResult {
+  /** Whether the blob bytes were written; `false` means the record must carry the truth. */
+  isStored: boolean;
+  /** Present when `isStored` is `false`; names the failure mode. */
+  reason?: 'overCap' | 'overBudget' | 'unavailable';
+}
+
+/** Storage footprint of the blob space, as reported by `tg.storage.getUsage`. */
+export interface TgStorageUsage {
+  /** Bytes used by stored blobs, tracked incrementally (startup estimate + deltas). */
+  usedBytes: number;
+  /** Effective blob budget: `min(budget setting, 50% of the storage quota)`. */
+  budgetBytes: number;
+  /** The origin storage quota reported by `navigator.storage.estimate()`. */
+  quotaBytes: number;
+}
+
+/** Options for `tg.storage.listRecords`. */
+export interface TgListRecordsOptions {
+  /** Restrict the listing to keys starting with this prefix. */
+  prefix?: string;
+  /** Page size; the engine caps the request at its own maximum. */
+  limit?: number;
+  /** Opaque resume point returned by a previous page's `cursor`. */
+  cursor?: string;
+}
+
+/** One page of `tg.storage.listRecords`. */
+export interface TgListRecordsPage<T> {
+  items: Array<{ key: string; record: T }>;
+  /** Pass to the next call to continue after the last item; `undefined` ends the listing. */
+  cursor?: string;
+}
+
+/**
+ * Persistent storage scoped per plugin and per account. Every method is
+ * error-contained: a failing call logs with the plugin name and resolves to
+ * a safe result, never throws. Storage outlives enable/disable — data is
+ * cleared only through the explicit remove/clear methods.
+ */
+export interface TgStorageSlice {
+  /** Persists a small JSON record; records are unbudgeted and never evicted. */
+  putRecord: (key: string, record: unknown) => Promise<void>;
+  /** Reads one record; `undefined` when missing or unparsable. */
+  getRecord: <T>(key: string) => Promise<T | undefined>;
+  /**
+   * Lists records by key, ascending. `cursor` pages through the plugin's
+   * whole record space; a `prefix` narrows the walk (e.g. `'chat:100:'`
+   * lists one chat's archive), and `limit` bounds the page size.
+   */
+  listRecords: <T>(options?: TgListRecordsOptions) => Promise<TgListRecordsPage<T>>;
+  /** Removes one record; a missing key resolves without error. */
+  deleteRecord: (key: string) => Promise<void>;
+  /** Removes every record of the calling plugin; blobs are untouched. */
+  clearRecords: () => Promise<void>;
+
+  /**
+   * Persists blob bytes under `key`; a record-only archive is indicated by
+   * the result, never by a throw. Blobs over the per-blob cap resolve
+   * `{ isStored: false, reason: 'overCap' }`; an exhausted budget resolves
+   * `reason: 'overBudget'` after eviction could not make room; a missing
+   * OPFS backend resolves `reason: 'unavailable'`.
+   */
+  putBlob: (key: string, blob: Blob) => Promise<TgBlobPutResult>;
+  /** Reads blob bytes; `undefined` when missing (e.g. evicted) or unavailable. */
+  getBlob: (key: string) => Promise<Blob | undefined>;
+  /** Removes one blob; a missing key resolves without error. */
+  deleteBlob: (key: string) => Promise<void>;
+  /** Footprint of the blob space: used, budget and quota bytes. */
+  getUsage: () => Promise<TgStorageUsage>;
 }

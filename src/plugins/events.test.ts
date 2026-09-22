@@ -56,6 +56,8 @@ function createFakeRuntime(activeChatId?: string) {
     getCurrentUserId: () => undefined,
     getChat: () => undefined,
     getLocalizedString: (key) => key,
+    getStorageEngine: () => Promise.reject(new Error('not exercised')),
+    getStorageEngineHandle: () => Promise.reject(new Error('not exercised')),
     createPluginReporter: (pluginName) => ({
       log: () => {},
       logError: (action, error) => {

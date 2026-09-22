@@ -63,6 +63,12 @@ function createTestUiSlice(pluginName: string) {
     getLocalizedString: () => {
       throw new Error('the ui slice never translates');
     },
+    getStorageEngine: () => {
+      throw new Error('the ui slice never touches storage');
+    },
+    getStorageEngineHandle: () => {
+      throw new Error('the ui slice never touches storage');
+    },
     showNotification,
   };
 

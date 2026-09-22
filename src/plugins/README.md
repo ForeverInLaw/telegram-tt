@@ -167,6 +167,40 @@ tg.util.getLocalizedString('SettingsPluginsAbout'); // keys resolve per the user
 - `log(...args)` prefixes every line with the plugin name; non-string args are JSON-serialized.
 - `getLocalizedString(key, variables?)` translates an app localization key. Valid keys are app keys — find them by their usage (`lang('SomeKey')` in components) or in `src/assets/localization/fallback.strings`; typing comes from `LangKey`. A failing translation logs and returns the raw key.
 
+## `tg.storage`
+
+Persistent storage scoped to the calling plugin and the signed-in account — records (small JSON) in IndexedDB, blobs (binary) in OPFS files, with a quota-aware budget. Any plugin can persist through it; the engine is a contract service, not plugin-private code.
+
+```ts
+// Records: unbudgeted, never evicted, survive restarts
+await tg.storage.putRecord('chat:100:msg5', { text: 'hello', capturedAt: 1737936000 });
+const record = await tg.storage.getRecord<{ text: string }>('chat:100:msg5');  // undefined when missing
+const page = await tg.storage.listRecords({ prefix: 'chat:100:' });           // { items, cursor? }
+const older = await tg.storage.listRecords({ prefix: 'chat:100:', cursor: page.cursor });
+await tg.storage.deleteRecord('chat:100:msg5');
+await tg.storage.clearRecords();                                              // clears ONLY this plugin's records
+
+// Blobs: budgeted, evicted oldest-captured-first
+const result = await tg.storage.putBlob('media:msg5', blob);
+// result: { isStored: true } | { isStored: false, reason: 'overCap' | 'overBudget' | 'unavailable' }
+const blob = await tg.storage.getBlob('media:msg5');                          // undefined when evicted
+await tg.storage.deleteBlob('media:msg5');
+
+const usage = await tg.storage.getUsage();  // { usedBytes, budgetBytes, quotaBytes }
+```
+
+Guarantees to design against:
+
+- **Scoping.** Keys are namespaced per plugin (`<pluginName>:<key>`) and the whole store is scoped per account slot; one plugin can never read another's data, and accounts never mix.
+- **Records are unbudgeted.** They are never evicted, and a failing eviction on the blob space never blocks a record write.
+- **Blobs are budgeted.** Total blob usage stays under `min(budget setting, 50% of the storage quota)`. Writing past it evicts the oldest captured blobs first (LRU); a blob that still does not fit resolves `{ isStored: false, reason: 'overBudget' }`.
+- **The per-blob cap decides blob-vs-record-only.** A blob above the cap resolves `{ isStored: false, reason: 'overCap' }` — store the archive record regardless; the flag is the signal, never a throw.
+- **`reason: 'unavailable'` means the environment lacks OPFS** (or the backend failed): blobs degrade to record-only semantics; records keep working.
+- **Error containment.** Every method logs failures with the plugin name and resolves a safe result — a missing engine answers reads with `undefined`/empty pages and writes with `{ isStored: false, reason: 'unavailable' }`.
+- **Data outlives enable/disable.** Disabling a plugin never drops its storage; re-enabling sees the same data. Only the explicit `delete*`/`clear*` methods remove it.
+
+Budget and per-blob cap settings live on the engine, not the slice (they are engine-wide): the settings UI reaches them through the runtime's engine handle (`getStorageEngineHandle` in `src/plugins/runtime.ts` — `setBudgetBytes` / `setPerBlobCapBytes` / `getUsage`). Plugins read usage via `tg.storage.getUsage()`.
+
 ## Contract policy
 
 The `tg` contract grows **additively only**: a release may add fields and methods, but never renames or removes them, so an existing plugin keeps compiling across releases.
@@ -183,6 +217,6 @@ Never break silently: a compile error in a plugin author's codebase is the last 
 
 - [`types.ts`](./types.ts) — the contract itself: every type, field and payload, with doc comments.
 - Settings → Plugins — the live list of what is loaded, with its toggle state.
-- The vitest suite under `src/plugins/` — pins the behavior: host lifecycle ([`host.test.ts`](./host.test.ts)), events ([`events.test.ts`](./events.test.ts)), the action facade ([`slices/api.test.ts`](./slices/api.test.ts)), store reads ([`slices/store.test.ts`](./slices/store.test.ts)), UI registries ([`slices/ui.test.ts`](./slices/ui.test.ts), [`registry.test.ts`](./registry.test.ts)) and utilities ([`slices/util.test.ts`](./slices/util.test.ts)).
+- The vitest suite under `src/plugins/` — pins the behavior: host lifecycle ([`host.test.ts`](./host.test.ts)), events ([`events.test.ts`](./events.test.ts)), the action facade ([`slices/api.test.ts`](./slices/api.test.ts)), store reads ([`slices/store.test.ts`](./slices/store.test.ts)), UI registries ([`slices/ui.test.ts`](./slices/ui.test.ts), [`registry.test.ts`](./registry.test.ts)), utilities ([`slices/util.test.ts`](./slices/util.test.ts)) and the storage engine ([`storageEngine.test.ts`](./storageEngine.test.ts), [`slices/storage.test.ts`](./slices/storage.test.ts)).
 
 If this README and [`types.ts`](./types.ts) disagree, `types.ts` wins and this README is the bug.
