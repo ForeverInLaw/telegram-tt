@@ -60,7 +60,9 @@ export function getUsagePercent(usage: TgStorageUsage): number {
  * which the capture pipeline (bots), the ghost renderer (transparency) and
  * the media capture (video prefetch) read live from the settings cache.
  */
-export function applyToggle(key: 'shouldCaptureBots' | 'shouldGhostBeTransparent' | 'shouldPrefetchVideos', value: boolean): void {
+type ToggleKey = 'shouldCaptureBots' | 'shouldGhostBeTransparent' | 'shouldPrefetchVideos';
+
+export function applyToggle(key: ToggleKey, value: boolean): void {
   updateSettings({ [key]: value });
 }
 

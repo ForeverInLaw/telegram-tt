@@ -3,14 +3,14 @@ import {
   memo, useEffect, useState,
 } from '../../lib/teact/teact';
 
-import useHistoryBack from '../../hooks/useHistoryBack';
-import useLang from '../../hooks/useLang';
-import useLastCallback from '../../hooks/useLastCallback';
-
+import captureKeyboardListeners from '../../util/captureKeyboardListeners';
 import {
   closeActivePluginScreen, getActivePluginScreen, subscribeToPluginScreen,
 } from '../../plugins/registry';
-import captureKeyboardListeners from '../../util/captureKeyboardListeners';
+
+import useHistoryBack from '../../hooks/useHistoryBack';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 
 import Button from '../ui/Button';
 
@@ -23,8 +23,10 @@ import './PluginScreen.scss';
  */
 const PluginScreen: FC = () => {
   const activeScreen = getActivePluginScreen();
-  const [, setScreenVersion] = useState(0);
+  const [screenVersion, setScreenVersion] = useState(0);
   const isScreenOpen = activeScreen !== undefined;
+  // `screenVersion` only exists to re-render on registry notifications.
+  void screenVersion;
 
   useEffect(() => {
     return subscribeToPluginScreen(() => {
@@ -82,4 +84,3 @@ const PluginScreen: FC = () => {
 };
 
 export default memo(PluginScreen);
-

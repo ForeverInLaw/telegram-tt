@@ -20,7 +20,7 @@ import {
   MIN_BUDGET_GB,
 } from './panelLogic';
 import { registerSettingsPanelGlue } from './registerPanel';
-import { getSettings, SETTINGS_KEY, loadSettings, resetSettings, updateSettings } from './settings';
+import { getSettings, loadSettings, resetSettings, SETTINGS_KEY, updateSettings } from './settings';
 
 const PLUGIN_NAME = 'anti-delete';
 const BYTES_PER_GB = 1024 ** 3;
@@ -162,7 +162,7 @@ describe('anti-delete plugin: settings panel logic', () => {
     // A generous quota shows the spec ceiling.
     expect(getBudgetSliderMaxGb(500 * BYTES_PER_GB)).toBe(MAX_BUDGET_GB);
     // A tiny quota still keeps the slider movable at its minimum.
-    expect(getBudgetSliderMaxGb(1 * BYTES_PER_GB)).toBe(MIN_BUDGET_GB);
+    expect(getBudgetSliderMaxGb(BYTES_PER_GB)).toBe(MIN_BUDGET_GB);
   });
 
   it('clamps the slider position itself under a low quota (stored value still persists)', () => {
@@ -220,7 +220,9 @@ describe('anti-delete plugin: settings panel logic', () => {
   });
 
   it('reads the usage bar values from the engine accounting', () => {
-    const view = buildUsageView({ usedBytes: 2 * BYTES_PER_GB, budgetBytes: 5 * BYTES_PER_GB, quotaBytes: 100 * BYTES_PER_GB });
+    const view = buildUsageView({
+      usedBytes: 2 * BYTES_PER_GB, budgetBytes: 5 * BYTES_PER_GB, quotaBytes: 100 * BYTES_PER_GB,
+    });
     expect(view.usage.usedBytes).toBe(2 * BYTES_PER_GB);
     expect(getUsagePercent(view.usage)).toBe(40);
     expect(getUsagePercent({ usedBytes: 6 * BYTES_PER_GB, budgetBytes: 5 * BYTES_PER_GB, quotaBytes: 0 })).toBe(100);

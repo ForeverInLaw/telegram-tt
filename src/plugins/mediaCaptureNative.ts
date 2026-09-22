@@ -6,14 +6,15 @@
  * environment provides neither, so runtime.ts imports this bridge lazily,
  * on the first `fetchMessageMedia` call, keeping the test surface clean.
  */
-import { ApiMediaFormat } from '../api/types';
+import { getGlobal } from '../global';
+
 import type { ApiMessage } from '../api/types';
 import type { SizeTarget } from '../api/types/messages';
+import { ApiMediaFormat } from '../api/types';
 
 import { MEDIA_CACHE_NAME } from '../config';
-import { getGlobal } from '../global';
-import { getMessageStatefulContent } from '../global/helpers/messages';
 import { getMessageMediaHash } from '../global/helpers/messageMedia';
+import { getMessageStatefulContent } from '../global/helpers/messages';
 import * as cacheApi from '../util/cacheApi';
 import { fetchBlob } from '../util/files';
 import * as mediaLoader from '../util/mediaLoader';

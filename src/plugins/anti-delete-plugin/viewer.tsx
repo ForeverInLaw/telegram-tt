@@ -10,7 +10,6 @@ import type { AntiDeleteRevisionRecord } from './revisions';
 
 import { copyTextToClipboard } from '../../util/clipboard';
 import { formatDateToString } from '../../util/dates/oldDateFormat';
-
 import { formatMediaSize, isInlineMediaKind, resolveMediaResolution } from './mediaCapture';
 
 import styles from './viewer.module.scss';
@@ -38,11 +37,13 @@ type OwnProps = {
   localize: (key: ViewerLangKey, variables?: ViewerLangVariables) => string;
 };
 
+type ChipKind = 'sticker' | 'document' | 'video' | 'audio' | 'voice';
+
 type MediaRowState =
   | { status: 'loading' }
   | { status: 'placeholder'; reason: 'neverCaptured' | 'evicted' }
   | { status: 'inline'; objectUrl: string; kind: 'photo' | 'gif' }
-  | { status: 'chip'; kind: 'sticker' | 'document' | 'video' | 'audio' | 'voice'; sizeBytes: number; fileName: string | undefined };
+  | { status: 'chip'; kind: ChipKind; sizeBytes: number; fileName: string | undefined };
 
 /** Lang keys for the media chips' kind labels. */
 const MEDIA_KIND_LANG_KEYS: Record<AntiDeleteMediaRef['kind'], 'DeletedMessagesMediaPhoto'

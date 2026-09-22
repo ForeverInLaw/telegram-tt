@@ -15,9 +15,9 @@
  * folder): locally-initiated deletions, bot chats while the bots toggle is
  * off, and service notifications stay out.
  */
-import { selectIsChatWithBot, selectChatMessage } from '../global/selectors';
 import type { GlobalState } from '../global/types';
 
+import { selectChatMessage, selectIsChatWithBot } from '../global/selectors';
 import { isServiceMessage } from './anti-delete-plugin/capture';
 import { getSettings } from './anti-delete-plugin/settings';
 import { getPluginList } from './host';

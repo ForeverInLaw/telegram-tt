@@ -1,6 +1,6 @@
-import type { TgPluginApi } from '../types';
-
 import { useEffect, useState } from '@teact';
+
+import type { TgPluginApi } from '../types';
 
 import {
   applyBudgetGb,
@@ -15,6 +15,8 @@ import {
   MIN_PER_BLOB_CAP_MB,
 } from './panelLogic';
 import { getSettings } from './settings';
+
+import useLastCallback from '../../hooks/useLastCallback';
 
 import styles from './settingsPanel.module.scss';
 
@@ -60,16 +62,16 @@ function AntiDeleteSettingsPanel({ tg }: OwnProps) {
   const [isClearing, setIsClearing] = useState(false);
   const [isClearConfirmVisible, setIsClearConfirmVisible] = useState(false);
 
-  async function refreshUsageView() {
+  const refreshUsageView = useLastCallback(async () => {
     const usage = await tg.storage.getUsage();
     setUsageView(buildUsageView(usage));
-  }
+  });
 
   // Poll on mount: the usage snapshot arrives async, and its quota clamps
   // the budget slider's maximum.
   useEffect(() => {
     void refreshUsageView();
-  }, []);
+  }, [refreshUsageView]);
 
   const settings = getSettings();
 

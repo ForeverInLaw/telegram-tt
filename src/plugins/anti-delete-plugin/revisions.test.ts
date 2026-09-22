@@ -118,7 +118,7 @@ function createTestHarness(): TestHarness {
     getMessage: (chatId, messageId) => messages.get(`${chatId}:${messageId}`),
     getLocalizedString: (key, variables) => {
       if (key === 'DeletedMessagesEditHistoryCount') return `${variables?.count} edits`;
-      return key as string;
+      return key;
     },
     getStorageEngine: () => Promise.resolve(engine),
     getStorageEngineHandle: () => Promise.resolve(engine),
@@ -293,7 +293,7 @@ describe('anti-delete plugin: revision capture round-trip', () => {
     lifetime.dispose();
   });
 
-  it('keys revisions by flipped edit date so the newest sorts first', async () => {
+  it('keys revisions by flipped edit date so the newest sorts first', () => {
     expect(buildRevisionKey(TEST_CHAT_ID, 503, 1730000300) < buildRevisionKey(TEST_CHAT_ID, 503, 1730000100))
       .toBe(true);
   });
@@ -322,7 +322,7 @@ describe('anti-delete plugin: revision capture filters', () => {
         isEdited: true,
         editDate: 1730000500,
         content: { text: { text: 'My own edited message' } },
-      } as ApiMessage,
+      },
     });
     await flushAsync();
 
@@ -434,7 +434,7 @@ describe('anti-delete plugin: revision bots toggle', () => {
       isOutgoing: false,
       senderId: '2',
       content: { text: { text: 'Group message' } },
-    } as ApiMessage);
+    });
     emitEdit(harness, 705, 'Group edited', 1730000500, groupChatId);
     await flushAsync();
 

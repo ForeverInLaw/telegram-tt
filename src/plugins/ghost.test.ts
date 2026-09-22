@@ -4,18 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../util/oggToWav');
 
-import type { ApiChat, ApiMessage } from '../api/types';
-import type { GlobalState } from '../global/types';
-import type { RequiredGlobalActions } from '../global/types';
-import type { TgPluginRuntime } from './runtime';
-
 import { getGlobal, setGlobal } from '../global';
+
+import type { ApiChat, ApiMessage } from '../api/types';
+import type { GlobalState, RequiredGlobalActions } from '../global/types';
+import type { TgPluginRuntime } from './runtime';
+import { MAIN_THREAD_ID } from '../api/types';
+
+import { deleteMessages } from '../global/actions/apiUpdaters/messages';
 import { INITIAL_GLOBAL_STATE } from '../global/initialState';
 import { updateListedIds } from '../global/reducers/messages';
-import { MAIN_THREAD_ID } from '../api/types';
-import { deleteMessages } from '../global/actions/apiUpdaters/messages';
-import { getPluginList, initPlugins, togglePlugin } from './host';
 import { resetSettings, updateSettings } from './anti-delete-plugin/settings';
+import { getPluginList, initPlugins, togglePlugin } from './host';
 
 const TEST_CHAT_ID = '100';
 const TEST_BOT_CHAT_ID = '500';
@@ -29,12 +29,12 @@ const MAIN_ID = MAIN_THREAD_ID;
 function createActionsStub(): RequiredGlobalActions {
   return new Proxy({ _: undefined }, {
     get: () => () => {},
-  }) as unknown as RequiredGlobalActions;
+  });
 }
 
 /** Builds a one-chat global with the given messages in the store. */
 function createGlobalFixture(chats: Record<string, ApiChat>, messages: Record<string, ApiMessage>): GlobalState {
-  const global = structuredClone(INITIAL_GLOBAL_STATE) as unknown as GlobalState;
+  const global = structuredClone(INITIAL_GLOBAL_STATE);
   global.currentUserId = '1';
   global.chats.byId = chats;
   global.messages.byChatId = Object.fromEntries(Object.entries(messages).map(([chatId, message]) => {
@@ -245,7 +245,7 @@ describe('ghost retention: deleteMessages updater', () => {
 describe('ghost retention: merge tolerance', () => {
   it('keeps the ghost in the store across listed-ids merges', () => {
     const ghost = { ...createTextMessage(TEST_CHAT_ID, 501), isArchivedDeleted: true };
-    const global = createGlobalFixture(
+    let global = createGlobalFixture(
       { [TEST_CHAT_ID]: { id: TEST_CHAT_ID, type: 'chatTypePrivate', title: 'Peer' } },
       { [TEST_CHAT_ID]: ghost },
     );
@@ -254,10 +254,10 @@ describe('ghost retention: merge tolerance', () => {
     // The server no longer knows 501: a fresh page arrives without it. The
     // listed-ids merge is additive, so the ghost's id list survives and the
     // message stays in `byId`.
-    const merged = updateListedIds(getGlobal(), TEST_CHAT_ID, MAIN_ID, [999]);
-    setGlobal(merged);
+    global = updateListedIds(getGlobal(), TEST_CHAT_ID, MAIN_ID, [999]);
+    setGlobal(global);
 
-    expect(merged.messages.byChatId[TEST_CHAT_ID].byId[501]).toBeDefined();
-    expect(merged.messages.byChatId[TEST_CHAT_ID].byId[501].isArchivedDeleted).toBe(true);
+    expect(global.messages.byChatId[TEST_CHAT_ID].byId[501]).toBeDefined();
+    expect(global.messages.byChatId[TEST_CHAT_ID].byId[501].isArchivedDeleted).toBe(true);
   });
 });

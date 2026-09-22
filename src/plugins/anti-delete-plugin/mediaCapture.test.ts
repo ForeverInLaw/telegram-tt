@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApiChat, ApiMessage, ApiUpdate, ApiUser } from '../../api/types';
-import type { TgMediaBlob, TgPluginApi } from '../types';
 import type { TgPluginRuntime } from '../runtime';
 import type { TgStorageEngine } from '../storageEngine';
+import type { TgMediaBlob, TgPluginApi } from '../types';
 
 import { buildTgApi } from '../api';
 import { createPluginContext } from '../context';
@@ -17,7 +17,9 @@ const PLUGIN_NAME = 'anti-delete';
 const TEST_CHAT_ID = '100';
 
 /** Options the fake `fetchMessageMedia` answers; each capture may re-program it. */
-type FetchFake = (chatId: string, messageId: number, options?: { shouldPrefetchVideo?: boolean }) => Promise<TgMediaBlob[]>;
+type FetchFake = (
+  chatId: string, messageId: number, options?: { shouldPrefetchVideo?: boolean },
+) => Promise<TgMediaBlob[]>;
 
 /**
  * In-memory engine double over the exact `TgStorageEngine` surface the
@@ -187,7 +189,7 @@ function storePhotoMessage(harness: TestHarness, messageId: number) {
     content: {
       photo: { mediaType: 'photo', id: 'photo-1', date: 1730000000, sizes: [] },
     },
-  } as ApiMessage);
+  });
 }
 
 /** A video message; `isGif: false` distinguishes it from an animated GIF. */
@@ -209,7 +211,7 @@ function storeVideoMessage(harness: TestHarness, messageId: number, isGif = fals
         isGif,
       },
     },
-  } as ApiMessage);
+  });
 }
 
 /** The blob the fake media read hands the capture for a cached photo. */

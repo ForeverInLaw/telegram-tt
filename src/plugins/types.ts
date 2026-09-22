@@ -1,5 +1,6 @@
-import type { ApiChat, ApiMessage, ApiUser } from '../api/types';
 import type { TeactNode } from '../lib/teact/teact';
+
+import type { ApiChat, ApiMessage, ApiUser } from '../api/types';
 import type { ThreadId } from '../types';
 import type { IconName } from '../types/icons';
 import type { LangKey, LangVariable, RegularLangKey } from '../types/language';

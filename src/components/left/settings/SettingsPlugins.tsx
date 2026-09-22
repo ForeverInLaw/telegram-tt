@@ -27,11 +27,15 @@ const SettingsPlugins = ({ isActive, onReset }: OwnProps) => {
   const [pluginList, setPluginList] = useState(() => getPluginList());
   // Registered panels change when plugins toggle; the registry notifies, and
   // the stable-reference array keeps identity-driven re-renders cheap.
-  const [, setPanelVersion] = useState(0);
+  const [panelVersion, setPanelVersion] = useState(0);
 
   useEffect(() => subscribeToSettingsPanels(() => {
     setPanelVersion((version) => version + 1);
   }), []);
+
+  // Read directly (not via `withGlobal`): the registry is module state, and
+  // `panelVersion` is only the subscription's re-render trigger.
+  void panelVersion;
 
   const lang = useLang();
 

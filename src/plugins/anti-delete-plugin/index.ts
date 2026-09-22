@@ -4,10 +4,10 @@ import { definePlugin } from '../types';
 
 import { createArchive } from './archive';
 import { buildCaptureKey, buildCaptureRecord, isServiceMessage } from './capture';
-import { captureRevisionFromUpdate } from './revisions';
 import { captureMessageMedia } from './mediaCapture';
-import { getSettings, loadSettings, resetSettings } from './settings';
 import { registerSettingsPanelGlue } from './registerPanel';
+import { captureRevisionFromUpdate } from './revisions';
+import { getSettings, loadSettings, resetSettings } from './settings';
 import { createArchiveViewerScreen } from './viewer';
 
 /**

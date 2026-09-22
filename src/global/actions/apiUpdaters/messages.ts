@@ -22,6 +22,7 @@ import { notifyAboutMessage } from '../../../util/notifications';
 import { onTickEnd } from '../../../util/schedulers';
 import { getServerTime } from '../../../util/serverTime';
 import { callApi } from '../../../api/gramjs';
+import { shouldRetainDeletedMessage } from '../../../plugins/ghost';
 import {
   addPaidReaction,
   checkIfHasUnreadReactions,
@@ -119,8 +120,6 @@ import {
   selectThreadLocalStateParam,
   selectThreadReadState,
 } from '../../selectors/threads';
-
-import { shouldRetainDeletedMessage } from '../../../plugins/ghost';
 
 const ANIMATION_DELAY = 350;
 const SNAP_ANIMATION_DELAY = 1000;

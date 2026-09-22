@@ -1,7 +1,7 @@
 import type { TgMessageEditedPayload, TgPluginApi } from '../types';
+import type { AntiDeleteFormattedText, AntiDeleteMessage } from './capture';
 
 import { isServiceMessage } from './capture';
-import type { AntiDeleteFormattedText, AntiDeleteMessage } from './capture';
 import { getSettings } from './settings';
 
 /** Version of the revision record layout; a bump is a forward migration. */
