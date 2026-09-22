@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ApiChat, ApiMessage } from '../../api/types';
+import type { ApiChat, ApiMessage, ApiUser } from '../../api/types';
 import type { TgPluginRuntime } from '../runtime';
 
 import { createPluginContext } from '../context';
@@ -11,7 +11,7 @@ const TEST_PLUGIN_NAME = 'test-plugin';
 type CapturedError = { action: string; error: unknown };
 
 /** Builds the slice over injectable store reads; no `src/global` involved. */
-function createTestStoreSlice() {
+function createTestStoreSlice(fakeUser?: ApiUser) {
   const capturedErrors: CapturedError[] = [];
   const fakeChat = { id: '10' } as ApiChat;
   const fakeMessage = { id: 20, chatId: '10' } as ApiMessage;
@@ -36,6 +36,7 @@ function createTestStoreSlice() {
     getActiveChatId: () => '10',
     getCurrentUserId: () => '100',
     getChat: (chatId) => (chatId === '10' ? fakeChat : undefined),
+    getUser: (userId) => (userId === '100' ? fakeUser : undefined),
     getCommonBoxChatId: () => undefined,
     getMessage: (chatId, messageId) => (
       chatId === '10' && messageId === 20 ? fakeMessage : undefined
@@ -60,6 +61,7 @@ function createTestStoreSlice() {
     capturedErrors,
     fakeChat,
     fakeMessage,
+    fakeUser,
   };
 }
 
@@ -89,6 +91,14 @@ describe('store slice', () => {
     expect(store.getMessage('10', 20)).toBe(fakeMessage);
     expect(store.getMessage('10', 999)).toBeUndefined();
     expect(store.getMessage('999', 20)).toBeUndefined();
+  });
+
+  it('returns stored user data by id', () => {
+    const fakeUser = { id: '100', type: 'userTypeBot' } as ApiUser;
+    const { store } = createTestStoreSlice(fakeUser);
+
+    expect(store.getUser('100')).toBe(fakeUser);
+    expect(store.getUser('999')).toBeUndefined();
   });
 
   it('contains a throwing store read and yields undefined', () => {

@@ -1,4 +1,4 @@
-import type { ApiChat, ApiMessage } from '../api/types';
+import type { ApiChat, ApiMessage, ApiUser } from '../api/types';
 import type { ThreadId } from '../types';
 import type { IconName } from '../types/icons';
 import type { LangKey, LangVariable } from '../types/language';
@@ -244,6 +244,11 @@ export interface TgStoreSlice {
   getCurrentUserId: () => string | undefined;
   /** Chat (or private user) data by id, as a read-only view of the stored object. */
   getChat: (chatId: string) => Readonly<ApiChat> | undefined;
+  /**
+   * User data by id (the `ApiUser` record behind a private chat's peer) —
+   * a read-only view; `undefined` when the store knows no such user.
+   */
+  getUser: (userId: string) => Readonly<ApiUser> | undefined;
   /**
    * Message data by chat and id, as a read-only view of the stored object;
    * `undefined` once the message is gone from the store.

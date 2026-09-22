@@ -1,0 +1,110 @@
+import type { TgMessageDeletedPayload, TgPluginApi } from '../types';
+import type { AntiDeleteArchive } from './archive';
+import { definePlugin } from '../types';
+
+import { createArchive } from './archive';
+import { buildCaptureKey, buildCaptureRecord, isServiceMessage } from './capture';
+import { getSettings, loadSettings, resetSettings } from './settings';
+/**
+ * Anti-delete plugin: keeps an archive of the messages this client saw get
+ * deleted. The `message:deleted` handler snapshots each still-intact
+ * message from the store (the event fires in the same update dispatch,
+ * before the native reducers remove the message) and persists a plain
+ * record through `tg.storage`. Locally-initiated deletions and bot chats
+ * (while the bots toggle is off) stay out of the archive. Captured records
+ * live in the storage slice, so they survive plugin disable/enable.
+ */
+export default definePlugin({
+  name: 'anti-delete',
+  version: '0.1.0',
+  description: 'Keeps an archive of messages others deleted, with text, metadata and senders.',
+  // Spec default: archival works out of the box
+  isEnabledByDefault: true,
+  setup(tg) {
+    // Load the persisted settings into the in-memory cache. The deletion
+    // handler reads the cache synchronously: a storage read is async, and
+    // the handler must not await anything (the snapshot window closes the
+    // moment the handler returns).
+    loadSettings(tg);
+
+    const archive = createArchive(tg);
+    runtimeArchive = archive;
+
+    const unsubscribe = tg.on('message:deleted', (payload) => {
+      captureDeletedMessages(tg, payload);
+    });
+
+    return () => {
+      unsubscribe();
+      resetSettings();
+      runtimeArchive = undefined;
+    };
+  },
+});
+
+// --- Runtime module state -------------------------------------------------------
+//
+// The current lifetime's archive: tests and later tickets read the archive
+// without a `tg` object at hand. The disposer clears it, so a disabled
+// plugin exposes no archive.
+
+let runtimeArchive: AntiDeleteArchive | undefined;
+
+/** The current lifetime's archive API; `undefined` while the plugin is disabled. */
+export function getArchive(): AntiDeleteArchive | undefined {
+  return runtimeArchive;
+}
+
+// --- Capture pipeline -------------------------------------------------------------
+
+/**
+ * Filters and captures one deletion event. The snapshot loop runs fully
+ * synchronously inside the handler: `getMessage` must read the store before
+ * the native delete pipeline removes the message, so nothing awaits here.
+ * The record writes themselves are async (fired, errors contained).
+ */
+function captureDeletedMessages(tg: TgPluginApi, payload: TgMessageDeletedPayload): void {
+  const { source, items } = payload;
+
+  for (const item of items) {
+    // This client's own deletions are not archive material
+    if (item.isLocal) continue;
+
+    // The app could not resolve the message's chat, so there is nothing to attach a record to
+    if (item.chatId === undefined) continue;
+
+    // Bot chats follow the bots toggle; ambiguous detections default to capturing
+    if (!getSettings().shouldCaptureBots && isBotChat(tg, item.chatId)) continue;
+
+    // The message is still intact at this point of the dispatch; the
+    // snapshot must happen right here, synchronously.
+    const message = tg.store.getMessage(item.chatId, item.messageId);
+    if (message === undefined) continue;
+
+    // Service notifications (chat created, someone pinned a message) carry
+    // no recoverable content
+    if (isServiceMessage(message)) continue;
+
+    const record = buildCaptureRecord(item.chatId, item.messageId, message, source);
+
+    // The write is async by contract; the slice contains backend errors, and
+    // this catch guards the chain itself so a throw never reaches the host
+    void tg.storage.putRecord(buildCaptureKey(item.chatId, item.messageId), record).catch((err) => {
+      tg.util.log('capture persist failed', err);
+    });
+  }
+}
+
+/**
+ * A bot chat is a private chat whose peer is a bot user. The chat record
+ * carries no bot flag, so the check reads the user record the private chat
+ * resolves to. Unknown users and non-private chat types capture (spec keeps
+ * coverage when detection is ambiguous).
+ */
+function isBotChat(tg: TgPluginApi, chatId: string): boolean {
+  const chat = tg.store.getChat(chatId);
+  if (chat?.type !== 'chatTypePrivate') return false;
+
+  const user = tg.store.getUser(chatId);
+  return user !== undefined && user.type === 'userTypeBot';
+}

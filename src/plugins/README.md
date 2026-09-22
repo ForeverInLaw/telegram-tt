@@ -9,6 +9,7 @@ The types in [`types.ts`](./types.ts) are the contract — this document explain
 | [`hello-plugin`](./hello-plugin/index.ts) | The showcase — one minimal use of every surface (this README's examples point into it) |
 | [`echo-plugin`](./echo-plugin/index.ts) | `tg.api` + `tg.store` + `tg.util` combined in one action |
 | [`ui-demo-plugin`](./ui-demo-plugin/index.ts) | Every `tg.ui` surface with a notification response |
+| [`anti-delete-plugin`](./anti-delete-plugin/index.ts) | A full feature plugin — deletion archival with settings, a read API and persistence |
 
 A plugin module never imports from `src/global` or `src/api` — only the reverse direction (app code importing from `src/plugins`) is legal, enforced by convention. Everything a plugin may call arrives in `setup(tg)`; types and helpers come from [`types.ts`](./types.ts) only.
 
@@ -162,6 +163,7 @@ Read-only plain data — never store handles, so plugin code cannot mutate app s
 const activeChatId = tg.store.getActiveChatId();    // undefined when no chat is open
 const currentUserId = tg.store.getCurrentUserId(); // undefined when signed out
 const chat = tg.store.getChat('12345');            // Readonly<ApiChat>, or undefined
+const user = tg.store.getUser('12345');           // Readonly<ApiUser>, or undefined
 const message = tg.store.getMessage('12345', 678); // Readonly<ApiMessage>, or undefined
 ```
 

@@ -60,6 +60,9 @@ function createTestUiSlice(pluginName: string) {
     getChat: () => {
       throw new Error('the ui slice never reads the store');
     },
+    getUser: () => {
+      throw new Error('the ui slice never reads the store');
+    },
     getCommonBoxChatId: () => {
       throw new Error('the ui slice never reads the store');
     },

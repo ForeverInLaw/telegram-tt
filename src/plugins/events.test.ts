@@ -58,6 +58,7 @@ function createFakeRuntime(activeChatId?: string, commonBoxChatIdsByMessageId: R
     getActiveMessageList: () => undefined,
     getCurrentUserId: () => undefined,
     getChat: () => undefined,
+    getUser: () => undefined,
     getCommonBoxChatId: (messageId) => commonBoxChatIdsByMessageId[messageId],
     getMessage: () => undefined,
     getLocalizedString: (key) => key,

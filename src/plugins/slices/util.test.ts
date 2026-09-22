@@ -42,6 +42,9 @@ function createTestUtilSlice() {
     getChat: () => {
       throw new Error('the util slice never reads the store');
     },
+    getUser: () => {
+      throw new Error('the util slice never reads the store');
+    },
     getCommonBoxChatId: () => {
       throw new Error('the util slice never reads the store');
     },
