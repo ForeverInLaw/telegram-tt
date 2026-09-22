@@ -5,6 +5,8 @@ import { definePlugin } from '../types';
 import { createArchive } from './archive';
 import { buildCaptureKey, buildCaptureRecord, isServiceMessage } from './capture';
 import { getSettings, loadSettings, resetSettings } from './settings';
+import { createArchiveViewerScreen } from './viewer';
+
 /**
  * Anti-delete plugin: keeps an archive of the messages this client saw get
  * deleted. The `message:deleted` handler snapshots each still-intact
@@ -29,6 +31,17 @@ export default definePlugin({
 
     const archive = createArchive(tg);
     runtimeArchive = archive;
+
+    // The chat (header and chat-list) context-menu item opening the archive
+    // viewer. The item always shows: capture counts are async, and the
+    // viewer's empty state covers capture-less chats.
+    tg.ui.addChatContextMenuItem({
+      icon: 'delete',
+      label: tg.util.getLocalizedString('DeletedMessages'),
+      onClick: (chat) => {
+        tg.ui.openScreen(createArchiveViewerScreen(archive, chat.id, tg.util.getLocalizedString));
+      },
+    });
 
     const unsubscribe = tg.on('message:deleted', (payload) => {
       captureDeletedMessages(tg, payload);

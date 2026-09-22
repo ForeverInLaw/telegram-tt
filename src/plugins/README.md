@@ -96,9 +96,33 @@ tg.ui.showNotification({
   icon: 'star',        // renderer defaults to an info icon
   duration: 3000,      // auto-dismiss in ms; renderer defaults to 3000
 });
+
+// Full screen with the app's own container: header with the title and a back
+// button, the node produced by `render` below it. Returns a close function.
+// See anti-delete-plugin.
+const closeScreen = tg.ui.openScreen({
+  title: 'My screen',                    // header title; localize it yourself
+  render: () => myScreenNode,           // node factory; a fresh node per render
+  // onClose: () => {},                  // optional; fires on every close
+});
+
+closeScreen();                          // closes the screen (fires `onClose`)
+
+// One panel section on the Settings → Plugins screen, under the plugin list.
+tg.ui.registerSettingsPanel({
+  render: () => myPanelNode,            // node factory; a fresh node per render
+});
 ```
 
 Repeated `showNotification` calls stack: every call carries a fresh generated id, so identical message bodies are not deduped by the notification pipeline.
+
+`openScreen` details to design against:
+
+- **One screen at a time.** Opening a screen replaces the currently open one (firing its `onClose` first); the app renders at most one plugin screen.
+- **The close function is keyed by plugin.** It closes the plugin's currently open screen only; when the screen was replaced by another plugin's `openScreen` or already closed, calling it is a no-op. Re-opening from the same plugin replaces its own screen (firing the old `onClose`).
+- **`render` is a factory.** The container calls it on every render pass, so return a fresh node, never a stored one.
+- **`onClose` fires on every close.** Back button, ESC, the returned close function, history back navigation and plugin disable all fire it.
+- **Disabling the plugin closes its open screen** and clears its settings panel, like every other contribution.
 
 ## `tg.on`
 

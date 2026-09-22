@@ -89,6 +89,7 @@ import ForwardRecipientPicker from './ForwardRecipientPicker.async';
 import GameModal from './GameModal';
 import HistoryCalendar from './HistoryCalendar.async';
 import NewContactModal from './NewContactModal.async';
+import PluginScreen from './PluginScreen';
 import PremiumLimitReachedModal from './premium/common/PremiumLimitReachedModal.async';
 import GiveawayModal from './premium/GiveawayModal.async';
 import PremiumMainModal from './premium/PremiumMainModal.async';
@@ -630,6 +631,7 @@ const Main = ({
       />
       <RightColumn isMobile={isMobile} />
       <MediaViewer isOpen={isMediaViewerOpen} />
+      <PluginScreen />
       <StoryViewer isOpen={isStoryViewerOpen} />
       <ForwardRecipientPicker isOpen={isForwardModalOpen} />
       <DraftRecipientPicker requestedDraft={requestedDraft} />
