@@ -2,7 +2,7 @@ import type { PluginContext } from '../context';
 import type { TgPluginReporter, TgPluginRuntime } from '../runtime';
 import type {
   TgChatContextMenuItem, TgComposerButton, TgMainMenuItem, TgMessageContextMenuItem, TgPluginApi,
-  TgPluginScreen, TgSettingsPanel, TgTeactNode, TgUiNotification,
+  TgPluginScreen, TgSettingsPanelRegistration, TgTeactNode, TgUiNotification,
 } from '../types';
 
 import {
@@ -60,6 +60,15 @@ export function createUiSlice(context: PluginContext, runtime: TgPluginRuntime):
         onClick: wrap(item.onClick),
       });
     },
+    registerSettingsPanel: (panel: TgSettingsPanelRegistration) => {
+      registerSettingsPanel(pluginName, {
+        title: panel.title,
+        render: createContainedRender(reporter, panel.render, 'settings panel render failed'),
+      });
+      return () => {
+        clearSettingsPanels(pluginName);
+      };
+    },
     showNotification: (notification: TgUiNotification) => {
       // The runtime service can throw (e.g. a malformed payload); contain it like a callback
       wrap(() => runtime.showNotification(notification))();
@@ -79,11 +88,6 @@ export function createUiSlice(context: PluginContext, runtime: TgPluginRuntime):
       return () => {
         closePluginScreen(pluginName);
       };
-    },
-    registerSettingsPanel: (panel: TgSettingsPanel) => {
-      registerSettingsPanel(pluginName, {
-        render: createContainedRender(reporter, panel.render, 'settings panel render failed'),
-      });
     },
   };
 }

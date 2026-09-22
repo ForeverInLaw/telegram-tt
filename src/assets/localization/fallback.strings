@@ -3239,3 +3239,14 @@
 "SettingsStickersDesc" = "Stickers, Emoji, Reactions";
 "SettingsLanguageDesc" = "{language}, Translate Messages";
 "SettingsSessionsDesc" = "Sessions, Automatically terminate";
+"AntiDeleteSettingsTitle" = "Deleted Messages Archive";
+"AntiDeleteSettingsCaptureBots" = "Capture deletions in bot chats";
+"AntiDeleteSettingsGhostTransparency" = "Semi-transparent deleted messages";
+"AntiDeleteSettingsPrefetchVideos" = "Prefetch deleted videos";
+"AntiDeleteSettingsMediaBudget" = "Media budget";
+"AntiDeleteSettingsPerBlobCap" = "Maximum size per media file";
+"AntiDeleteSettingsUsage" = "Storage usage";
+"AntiDeleteSettingsQuota" = "Quota";
+"AntiDeleteSettingsClearAll" = "Clear all archived messages";
+"AntiDeleteSettingsClearAllConfirm" = "Are you sure?";
+"AntiDeleteSettingsClearAllDescription" = "Removes every archived message and media file of this account.";

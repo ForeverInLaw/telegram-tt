@@ -1,6 +1,6 @@
 import type {
   TgChatContextMenuItem, TgComposerButton, TgMainMenuItem, TgMessageContextMenuItem,
-  TgPluginScreen, TgSettingsPanel,
+  TgPluginScreen, TgSettingsPanelRegistration,
 } from './types';
 
 /**
@@ -51,7 +51,7 @@ const messageContextMenuRegistry = createSurfaceRegistry<TgMessageContextMenuIte
 const chatContextMenuRegistry = createSurfaceRegistry<TgChatContextMenuItem>();
 const mainMenuRegistry = createSurfaceRegistry<TgMainMenuItem>();
 const composerButtonRegistry = createSurfaceRegistry<TgComposerButton>();
-const settingsPanelRegistry = createSurfaceRegistry<TgSettingsPanel>();
+const settingsPanelRegistry = createSurfaceRegistry<TgSettingsPanelRegistration>();
 
 // Settings screens re-render on every toggle already (they read the host
 // list), but a plugin registered mid-session must appear without one; a tiny
@@ -110,7 +110,7 @@ export function getComposerButtons(): readonly TgComposerButton[] {
   return composerButtonRegistry.getAll();
 }
 
-export function registerSettingsPanel(pluginName: string, panel: TgSettingsPanel) {
+export function registerSettingsPanel(pluginName: string, panel: TgSettingsPanelRegistration) {
   settingsPanelRegistry.register(pluginName, panel);
   notifySettingsPanelsChanged();
 }
@@ -124,7 +124,7 @@ export function clearSettingsPanels(pluginName: string) {
   }
 }
 
-export function getSettingsPanels(): readonly TgSettingsPanel[] {
+export function getSettingsPanels(): readonly TgSettingsPanelRegistration[] {
   return settingsPanelRegistry.getAll();
 }
 

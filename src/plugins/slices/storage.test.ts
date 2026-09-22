@@ -50,6 +50,14 @@ function createFakeEngine() {
       blobData.delete(key);
       return Promise.resolve();
     }),
+    clearBlobs: vi.fn((prefix?: string) => {
+      for (const key of [...blobData.keys()]) {
+        if (prefix === undefined || key.startsWith(prefix)) {
+          blobData.delete(key);
+        }
+      }
+      return Promise.resolve();
+    }),
     getUsage: vi.fn(() => Promise.resolve({ usedBytes: 10, budgetBytes: 100, quotaBytes: 1000 })),
     setBudgetBytes: vi.fn(() => Promise.resolve()),
     setPerBlobCapBytes: vi.fn(() => Promise.resolve()),

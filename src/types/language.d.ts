@@ -2380,6 +2380,17 @@ export interface LangPair {
   'SettingsPerformanceDesc': undefined;
   'SettingsStickersDesc': undefined;
   'SettingsSessionsDesc': undefined;
+  'AntiDeleteSettingsTitle': undefined;
+  'AntiDeleteSettingsCaptureBots': undefined;
+  'AntiDeleteSettingsGhostTransparency': undefined;
+  'AntiDeleteSettingsPrefetchVideos': undefined;
+  'AntiDeleteSettingsMediaBudget': undefined;
+  'AntiDeleteSettingsPerBlobCap': undefined;
+  'AntiDeleteSettingsUsage': undefined;
+  'AntiDeleteSettingsQuota': undefined;
+  'AntiDeleteSettingsClearAll': undefined;
+  'AntiDeleteSettingsClearAllConfirm': undefined;
+  'AntiDeleteSettingsClearAllDescription': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {

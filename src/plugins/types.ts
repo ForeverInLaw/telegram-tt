@@ -1,8 +1,8 @@
 import type { ApiChat, ApiMessage, ApiUser } from '../api/types';
+import type { TeactNode } from '../lib/teact/teact';
 import type { ThreadId } from '../types';
 import type { IconName } from '../types/icons';
 import type { LangKey, LangVariable } from '../types/language';
-import type { TeactNode } from '../lib/teact/teact';
 
 /** A node factory plugins pass to `tg.ui` render surfaces; re-exported here so plugin code stays within the import policy. */
 export type TgTeactNode = TeactNode;
@@ -19,15 +19,6 @@ export interface TgPluginScreen {
   render: () => TgTeactNode;
   /** Called when the screen closes (back button, container unmount, plugin disable). */
   onClose?: () => void;
-}
-
-/**
- * One panel section a plugin contributes to the Settings → Plugins screen,
- * rendered under the plugin list. One panel per registration.
- */
-export interface TgSettingsPanel {
-  /** Renders the panel content; a fresh node per render. */
-  render: () => TgTeactNode;
 }
 
 /**
@@ -71,10 +62,11 @@ export interface TgPluginApi {
      */
     openScreen: (screen: TgPluginScreen) => () => void;
     /**
-     * Contributes one panel section to the Settings → Plugins screen, rendered
-     * under the plugin list. Cleared when the plugin is disabled.
+     * Registers the plugin's settings panel, rendered inside Settings →
+     * Plugins under the plugin's own list entry. Returns the unregister
+     * function; the host also removes the panel when the plugin is disabled.
      */
-    registerSettingsPanel: (panel: TgSettingsPanel) => void;
+    registerSettingsPanel: (panel: TgSettingsPanelRegistration) => () => void;
   };
   /**
    * Subscribe to an app event and receive its typed payload; returns the
@@ -163,6 +155,18 @@ export interface TgUiNotification {
   icon?: IconName;
   /** Auto-dismiss delay in ms; the renderer defaults to 3000. */
   duration?: number;
+}
+
+/**
+ * Declarative descriptor for a plugin's settings panel. The app renders the
+ * returned node with its own Settings primitives and styling inside
+ * Settings → Plugins; the panel is removed when the plugin is disabled.
+ */
+export interface TgSettingsPanelRegistration {
+  /** Panel section heading, an app lang key. */
+  title: LangKey;
+  /** Renders the panel's Teact node; called per render of the settings screen. */
+  render: () => TeactNode;
 }
 
 /** Names of the app events a plugin can observe through `tg.on`. */
@@ -388,6 +392,23 @@ export interface TgStorageSlice {
   getBlob: (key: string) => Promise<Blob | undefined>;
   /** Removes one blob; a missing key resolves without error. */
   deleteBlob: (key: string) => Promise<void>;
+  /**
+   * Removes every blob of the calling plugin (its OPFS directory) and resets
+   * the shared usage accounting accordingly; records are untouched.
+   */
+  clearBlobs: () => Promise<void>;
   /** Footprint of the blob space: used, budget and quota bytes. */
   getUsage: () => Promise<TgStorageUsage>;
+  /**
+   * Sets the engine-wide media budget in bytes; the engine clamps the
+   * effective budget to 50% of the origin quota. Intended for the settings
+   * UI of the plugin that owns the budget's semantics.
+   */
+  setBudgetBytes: (bytes: number) => Promise<void>;
+  /**
+   * Sets the engine-wide cap on one blob in bytes; larger media stays
+   * record-only. Intended for the settings UI of the plugin that owns the
+   * cap's semantics.
+   */
+  setPerBlobCapBytes: (bytes: number) => Promise<void>;
 }

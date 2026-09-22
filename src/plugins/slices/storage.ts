@@ -115,6 +115,17 @@ export function createStorageSlice(context: PluginContext, runtime: TgPluginRunt
       }
     },
 
+    clearBlobs: async () => {
+      try {
+        const engine = await runtime.getStorageEngine();
+        // The namespace prefix keeps other plugins' blobs (and their
+        // accounting) intact, exactly like `clearRecords` does for records.
+        await engine.clearBlobs(namespace);
+      } catch (error) {
+        reporter.logError('storage.clearBlobs', error);
+      }
+    },
+
     getUsage: async () => {
       try {
         const engine = await runtime.getStorageEngine();
@@ -122,6 +133,26 @@ export function createStorageSlice(context: PluginContext, runtime: TgPluginRunt
       } catch (error) {
         reporter.logError('storage.getUsage', error);
         return { usedBytes: 0, budgetBytes: 0, quotaBytes: 0 } satisfies TgStorageUsage;
+      }
+    },
+
+    setBudgetBytes: async (bytes) => {
+      try {
+        // The handle is the engine-wide config surface; a plugin calling it is
+        // the settings UI that owns the budget's semantics.
+        const engineHandle = await runtime.getStorageEngineHandle();
+        await engineHandle.setBudgetBytes(bytes);
+      } catch (error) {
+        reporter.logError('storage.setBudgetBytes', error);
+      }
+    },
+
+    setPerBlobCapBytes: async (bytes) => {
+      try {
+        const engineHandle = await runtime.getStorageEngineHandle();
+        await engineHandle.setPerBlobCapBytes(bytes);
+      } catch (error) {
+        reporter.logError('storage.setPerBlobCapBytes', error);
       }
     },
   };

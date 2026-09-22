@@ -58,6 +58,7 @@ function createFakeEngine() {
     putBlob: () => Promise.resolve({ isStored: true }),
     getBlob: () => Promise.resolve(undefined),
     deleteBlob: () => Promise.resolve(),
+    clearBlobs: () => Promise.resolve(),
     getUsage: () => Promise.resolve({ usedBytes: 0, budgetBytes: 100, quotaBytes: 1000 }),
     setBudgetBytes: () => Promise.resolve(),
     setPerBlobCapBytes: () => Promise.resolve(),

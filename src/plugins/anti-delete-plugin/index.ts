@@ -5,6 +5,7 @@ import { definePlugin } from '../types';
 import { createArchive } from './archive';
 import { buildCaptureKey, buildCaptureRecord, isServiceMessage } from './capture';
 import { getSettings, loadSettings, resetSettings } from './settings';
+import { registerSettingsPanelGlue } from './registerPanel';
 import { createArchiveViewerScreen } from './viewer';
 
 /**
@@ -43,11 +44,15 @@ export default definePlugin({
       },
     });
 
+    // The settings panel renders under Settings → Plugins through the
+    // `registerSettingsPanel` seam.
+    const unregisterPanel = registerSettingsPanelGlue(tg);
     const unsubscribe = tg.on('message:deleted', (payload) => {
       captureDeletedMessages(tg, payload);
     });
 
     return () => {
+      unregisterPanel?.();
       unsubscribe();
       resetSettings();
       runtimeArchive = undefined;

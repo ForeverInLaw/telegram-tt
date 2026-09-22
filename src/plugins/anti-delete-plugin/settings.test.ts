@@ -27,7 +27,10 @@ function createFakeStorage() {
     putBlob: () => Promise.resolve({ isStored: true }),
     getBlob: () => Promise.resolve(undefined),
     deleteBlob: () => Promise.resolve(),
+    clearBlobs: () => Promise.resolve(),
     getUsage: () => Promise.resolve({ usedBytes: 0, budgetBytes: 0, quotaBytes: 0 }),
+    setBudgetBytes: () => Promise.resolve(),
+    setPerBlobCapBytes: () => Promise.resolve(),
   };
   return { records, storage };
 }
