@@ -19,7 +19,7 @@ import type { GlobalState } from '../global/types';
 
 import { selectChatMessage, selectIsChatWithBot } from '../global/selectors';
 import { isServiceMessage } from './anti-delete-plugin/capture';
-import { getSettings } from './anti-delete-plugin/settings';
+import { areSettingsReady, getSettings } from './anti-delete-plugin/settings';
 import { getPluginList } from './host';
 
 /** Whether the anti-delete plugin's lifetime is currently active. */
@@ -40,6 +40,11 @@ export function shouldRetainDeletedMessage(
   if (isLocal) return false;
 
   if (!isAntiDeleteActive()) return false;
+
+  // Until the persisted settings settle, the bots toggle answers from
+  // defaults; retention waits like capture does, so the user's stored
+  // choice stays authoritative
+  if (!areSettingsReady()) return false;
 
   // Bot chats follow the bots toggle, mirroring the capture filter
   if (!getSettings().shouldCaptureBots && selectIsChatWithBot(global, chatId)) return false;

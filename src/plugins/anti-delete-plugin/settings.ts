@@ -43,6 +43,10 @@ export const DEFAULT_ANTI_DELETE_SETTINGS: AntiDeleteSettings = {
 let settingsCache: AntiDeleteSettings = { ...DEFAULT_ANTI_DELETE_SETTINGS };
 let areSettingsLoaded = false;
 let settingsTg: TgPluginApi | undefined;
+// Each `loadSettings` (one per plugin lifetime) gets a fresh generation; a
+// load callback applies its result only while it is still the newest one,
+// so a late callback cannot overwrite newer updates or re-push stale limits
+let settingsLoadGeneration = 0;
 
 /** Whether the persisted settings record has settled into the cache this lifetime. */
 export function areSettingsReady(): boolean {
@@ -60,8 +64,13 @@ export function areSettingsReady(): boolean {
 export function loadSettings(tg: TgPluginApi): void {
   settingsTg = tg;
   areSettingsLoaded = false;
+  const generation = ++settingsLoadGeneration;
 
   tg.storage.getRecord<PersistedSettings>(SETTINGS_KEY).then((stored) => {
+    // A newer lifetime (or this callback losing a race to a re-enable) must
+    // win: applying a stale record would overwrite newer settings updates
+    if (generation !== settingsLoadGeneration) return;
+
     settingsCache = mergeSettings(stored);
     areSettingsLoaded = true;
 
@@ -111,6 +120,7 @@ export function getSettings(): AntiDeleteSettings {
 export function resetSettings(): void {
   settingsCache = { ...DEFAULT_ANTI_DELETE_SETTINGS };
   areSettingsLoaded = false;
+  settingsLoadGeneration += 1;
   settingsTg = undefined;
 }
 

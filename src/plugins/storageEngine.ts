@@ -257,6 +257,20 @@ export async function createStorageEngine(services: TgStorageServices): Promise<
   let blobIndex: TgStorageBlobEntry[] = [];
   let areWritesReady = false;
   let hasPersistBeenRequested = false;
+  // Blob-space writes (putBlob/deleteBlob/clearBlobs/eviction) interleave
+  // across awaits while mutating `usageBytes` and `blobIndex`; the queue
+  // runs them one at a time, so concurrent callers cannot lose index
+  // entries or double-count usage
+  let blobWriteQueue: Promise<void> = Promise.resolve();
+
+  /** Serializes one blob-space mutation behind the previous one. */
+  function enqueueBlobWrite<T>(write: () => Promise<T>): Promise<T> {
+    const result = blobWriteQueue.then(write);
+    // The queue must keep draining even when a write rejects (errors are
+    // contained inside the write functions themselves)
+    blobWriteQueue = result.then(() => undefined, () => undefined);
+    return result;
+  }
 
   try {
     await migrateForward();
@@ -266,12 +280,13 @@ export async function createStorageEngine(services: TgStorageServices): Promise<
       recordBackend.get<TgStorageBlobEntry[]>(BLOB_INDEX_KEY),
     ]);
     quotaBytes = estimate.quota;
-    // First boot seeds the counter from the origin estimate; later boots trust
-    // the persisted counter, which is exact per-delta. The estimate counts
-    // the app's own caches too, but only until the first write re-persists
-    // the exact value — a startup blob scan is what the incremental
-    // accounting exists to avoid.
-    usageBytes = usageRecord ? usageRecord.usedBytes : estimate.usage;
+    // First boot seeds the counter from the origin estimate, but ONLY when
+    // the persisted blob index proves earlier writes — an estimate above
+    // the budget with an empty index would reject every blob write
+    // permanently (nothing to evict). A fresh store starts at zero; the
+    // first write re-persists the exact value, keeping the incremental
+    // accounting intact (a startup blob scan is what it exists to avoid).
+    usageBytes = usageRecord ? usageRecord.usedBytes : (index ? estimate.usage : 0);
     blobIndex = index ?? [];
     areWritesReady = true;
   } catch (err) {
@@ -365,54 +380,60 @@ export async function createStorageEngine(services: TgStorageServices): Promise<
     return projectedBytes <= getBudgetBytes();
   }
 
-  async function putBlob(key: string, blob: Blob): Promise<TgBlobPutResult> {
+  function putBlob(key: string, blob: Blob): Promise<TgBlobPutResult> {
     if (!areWritesReady) {
-      return { isStored: false, reason: 'unavailable' };
+      return Promise.resolve({ isStored: false, reason: 'unavailable' });
     }
     if (blob.size > meta.perBlobCapBytes) {
-      return { isStored: false, reason: 'overCap' };
+      return Promise.resolve({ isStored: false, reason: 'overCap' });
     }
     if (!blobBackend) {
-      return { isStored: false, reason: 'unavailable' };
+      return Promise.resolve({ isStored: false, reason: 'unavailable' });
     }
 
-    const previousSizeBytes = blobIndex.find((entry) => entry.key === key)?.sizeBytes ?? 0;
-    try {
-      // The net delta drives eviction: overwriting a blob only needs its growth
-      const isFitting = await evictForBytes(blob.size - previousSizeBytes);
-      if (!isFitting) {
-        return { isStored: false, reason: 'overBudget' };
+    // The whole read-evict-write runs serialized behind other blob writes
+    return enqueueBlobWrite(async () => {
+      const previousSizeBytes = blobIndex.find((entry) => entry.key === key)?.sizeBytes ?? 0;
+      try {
+        // The net delta drives eviction: overwriting a blob only needs its growth
+        const isFitting = await evictForBytes(blob.size - previousSizeBytes);
+        if (!isFitting) {
+          return { isStored: false, reason: 'overBudget' as const };
+        }
+        await blobBackend.put(key, blob);
+      } catch (err) {
+        logError(`failed to put blob ${key}`, err);
+        return { isStored: false, reason: 'unavailable' as const };
       }
-      await blobBackend.put(key, blob);
-    } catch (err) {
-      logError(`failed to put blob ${key}`, err);
-      return { isStored: false, reason: 'unavailable' };
-    }
 
-    // The delta applies only after a confirmed write; the previous entry is
-    // re-read because the eviction loop above may have removed it already.
-    const oldEntry = blobIndex.find((entry) => entry.key === key);
-    blobIndex = blobIndex.filter((entry) => entry.key !== key);
-    usageBytes = Math.max(0, usageBytes - (oldEntry?.sizeBytes ?? 0)) + blob.size;
-    blobIndex.push({ key, sizeBytes: blob.size, capturedAt: now() });
+      // The delta applies only after a confirmed write; the previous entry is
+      // re-read because the eviction loop above may have removed it already.
+      const oldEntry = blobIndex.find((entry) => entry.key === key);
+      blobIndex = blobIndex.filter((entry) => entry.key !== key);
+      usageBytes = Math.max(0, usageBytes - (oldEntry?.sizeBytes ?? 0)) + blob.size;
+      blobIndex.push({ key, sizeBytes: blob.size, capturedAt: now() });
 
-    await Promise.all([persistUsage(), persistIndex(), requestPersistOnce()]);
-    return { isStored: true };
+      await Promise.all([persistUsage(), persistIndex(), requestPersistOnce()]);
+      return { isStored: true as const };
+    });
   }
 
-  async function deleteBlob(key: string) {
-    const entry = blobIndex.find((blobEntry) => blobEntry.key === key);
-    blobIndex = blobIndex.filter((blobEntry) => blobEntry.key !== key);
-    usageBytes = Math.max(0, usageBytes - (entry?.sizeBytes ?? 0));
+  function deleteBlob(key: string): Promise<void> {
+    // The whole remove-account-persist runs serialized behind other blob writes
+    return enqueueBlobWrite(async () => {
+      const entry = blobIndex.find((blobEntry) => blobEntry.key === key);
+      blobIndex = blobIndex.filter((blobEntry) => blobEntry.key !== key);
+      usageBytes = Math.max(0, usageBytes - (entry?.sizeBytes ?? 0));
 
-    try {
-      if (blobBackend && entry) {
-        await blobBackend.remove(key);
+      try {
+        if (blobBackend && entry) {
+          await blobBackend.remove(key);
+        }
+        await Promise.all([persistUsage(), persistIndex()]);
+      } catch (err) {
+        logError(`failed to delete blob ${key}`, err);
       }
-      await Promise.all([persistUsage(), persistIndex()]);
-    } catch (err) {
-      logError(`failed to delete blob ${key}`, err);
-    }
+    });
   }
 
   /**
@@ -421,25 +442,28 @@ export async function createStorageEngine(services: TgStorageServices): Promise<
    * is the accounting source of truth, so accounting stays exact even when a
    * file removal fails.
    */
-  async function clearBlobs(prefix?: string) {
-    const removed = prefix === undefined ? blobIndex : blobIndex.filter((entry) => entry.key.startsWith(prefix));
-    if (removed.length === 0) return;
+  function clearBlobs(prefix?: string): Promise<void> {
+    // The whole clear runs serialized behind other blob writes
+    return enqueueBlobWrite(async () => {
+      const removed = prefix === undefined ? blobIndex : blobIndex.filter((entry) => entry.key.startsWith(prefix));
+      if (removed.length === 0) return;
 
-    blobIndex = blobIndex.filter((entry) => prefix !== undefined && !entry.key.startsWith(prefix));
-    usageBytes = Math.max(0, usageBytes - removed.reduce((sum, entry) => sum + entry.sizeBytes, 0));
+      blobIndex = blobIndex.filter((entry) => prefix !== undefined && !entry.key.startsWith(prefix));
+      usageBytes = Math.max(0, usageBytes - removed.reduce((sum, entry) => sum + entry.sizeBytes, 0));
 
-    if (blobBackend) {
-      for (const entry of removed) {
-        try {
-          await blobBackend.remove(entry.key);
-        } catch (err) {
-          // A stuck file stays on disk, but the index no longer serves it
-          logError(`failed to clear blob ${entry.key}`, err);
+      if (blobBackend) {
+        for (const entry of removed) {
+          try {
+            await blobBackend.remove(entry.key);
+          } catch (err) {
+            // A stuck file stays on disk, but the index no longer serves it
+            logError(`failed to clear blob ${entry.key}`, err);
+          }
         }
       }
-    }
 
-    await Promise.all([persistUsage(), persistIndex()]);
+      await Promise.all([persistUsage(), persistIndex()]);
+    });
   }
 
   async function putRecord(key: string, record: unknown) {

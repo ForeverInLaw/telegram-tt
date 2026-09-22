@@ -922,7 +922,9 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
                   icon={item.icon}
                   destructive={item.destructive}
                   onClick={() => {
-                    item.onClick(chat);
+                    // Saved Messages targets the dialog chat, like the native
+                    // actions in this menu (e.g. the delete modal below)
+                    item.onClick(savedDialog || chat);
                     closeMenu();
                   }}
                 >

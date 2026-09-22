@@ -468,6 +468,7 @@ export interface LangPair {
   'DeletedMessagesCopied': undefined;
   'DeletedMessagesMediaPlaceholder': undefined;
   'DeletedMessagesEditHistory': undefined;
+  'DeletedMessagesEditHistoryEmpty': undefined;
   'DeletedMessagesEditHistoryRevision': undefined;
   'DeletedMessagesMediaPhoto': undefined;
   'DeletedMessagesMediaGif': undefined;

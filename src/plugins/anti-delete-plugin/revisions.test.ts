@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ApiChat, ApiMessage, ApiUpdate, ApiUser } from '../../api/types';
+import type { ApiChat, ApiFormattedText, ApiMessage, ApiUpdate, ApiUser } from '../../api/types';
 import type { TgPluginRuntime } from '../runtime';
 import type { TgStorageEngine } from '../storageEngine';
 import type { TgPluginApi } from '../types';
@@ -171,6 +171,7 @@ function emitEdit(
   newText: string,
   editDate: number,
   chatId = TEST_CHAT_ID,
+  entities?: ApiFormattedText['entities'],
 ) {
   harness.emitApiUpdate({
     '@type': 'updateMessage',
@@ -184,7 +185,7 @@ function emitEdit(
       isEdited: true,
       editDate,
       senderId: '2',
-      content: { text: { text: newText } },
+      content: { text: { text: newText, entities } },
     } as ApiMessage,
   });
 }
@@ -299,6 +300,42 @@ describe('anti-delete plugin: revision capture round-trip', () => {
   it('keys revisions by flipped edit date so the newest sorts first', () => {
     expect(buildRevisionKey(TEST_CHAT_ID, 503, 1730000300) < buildRevisionKey(TEST_CHAT_ID, 503, 1730000100))
       .toBe(true);
+  });
+
+  it('captures two edits in the same millisecond under distinct keys', async () => {
+    const lifetime = await harness.startPlugin();
+    storeMessage(harness, 505, 'Same millisecond');
+
+    // Two rapid edits share `editDate` (server seconds) and even the same
+    // wall-clock millisecond: the monotonic `capturedAt` keeps both records
+    emitEdit(harness, 505, 'First edit', 1730000400);
+    emitEdit(harness, 505, 'Second edit', 1730000400);
+    await flushAsync();
+
+    const revisions = await getArchive()!.readRevisions(TEST_CHAT_ID, 505);
+    expect(revisions).toHaveLength(2);
+    const keys = new Set(revisions.map((revision) => revision.capturedAt));
+    expect(keys.size).toBe(2);
+
+    lifetime.dispose();
+  });
+
+  it('captures an entity-only edit (same text, new formatting)', async () => {
+    const lifetime = await harness.startPlugin();
+    storeMessage(harness, 506, 'Bold later');
+
+    // The text stays identical; only the entities change. The revision must
+    // still land — formatting edits are real edits
+    emitEdit(harness, 506, 'Bold later', 1730000500, TEST_CHAT_ID, [
+      { type: 'MessageEntityBold', offset: 0, length: 4 },
+    ]);
+    await flushAsync();
+
+    const revisions = await getArchive()!.readRevisions(TEST_CHAT_ID, 506);
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0].text.text).toBe('Bold later');
+
+    lifetime.dispose();
   });
 });
 

@@ -102,9 +102,15 @@ export function captureRevisionFromUpdate(tg: TgPluginApi, payload: TgMessageEdi
   if (text === undefined) return;
 
   // A full-message `updateMessage` with `isEdited` set arrives without a
-  // text change too (channel edit broadcasts): an identical text means no
-  // revision to keep
-  if (message.content?.text?.text !== undefined && message.content.text.text === text.text) return;
+  // change too (channel edit broadcasts): identical text AND entities mean
+  // no revision to keep; an entity-only edit (same text, new formatting) is
+  // a real revision
+  const updateText = message.content?.text;
+  if (updateText !== undefined) {
+    const isTextUnchanged = updateText.text === text.text;
+    const areEntitiesUnchanged = updateText.entities === text.entities;
+    if (isTextUnchanged && areEntitiesUnchanged) return;
+  }
 
   const record = buildRevisionRecord(chatId, messageId, storedMessage, message);
 
@@ -140,8 +146,18 @@ function buildRevisionRecord(
       text: storedMessage.content.text?.text ?? '',
       entities: storedMessage.content.text?.entities,
     },
-    capturedAt: Date.now(),
+    capturedAt: nextCapturedAt(),
   };
+}
+
+// `Date.now()` repeats for rapid edits, which would collide the revision
+// key (and the viewer's React key). A monotonic counter guarantees that
+// every capture within one app run produces a distinct `capturedAt`.
+let lastCapturedAt = 0;
+
+function nextCapturedAt(): number {
+  lastCapturedAt = Math.max(lastCapturedAt + 1, Date.now());
+  return lastCapturedAt;
 }
 
 /**

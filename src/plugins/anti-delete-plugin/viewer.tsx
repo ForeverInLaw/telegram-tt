@@ -201,6 +201,12 @@ const ArchiveViewer: FC<OwnProps> = ({ archive, chatId, localize }) => {
     const cursor = nextCursor;
     isLoadingRef.current = true;
     void archive.readCaptures(chatId, { limit: PAGE_LIMIT, cursor }).then((page) => {
+      // The chat may have changed (or the archive cleared) while the page
+      // was in flight; a stale page must not append into the current view
+      if (chatIdRef.current !== chatId) {
+        isLoadingRef.current = false;
+        return;
+      }
       setCaptures((previous) => [...page.captures, ...previous ?? []]);
       setNextCursor(page.nextCursor);
       isLoadingRef.current = false;
@@ -330,21 +336,23 @@ const RevisionExpander: FC<{
         {localize('DeletedMessagesEditHistory')}
       </button>
       {isExpanded && (
-        revisions === undefined || revisions.length === 0
+        revisions === undefined
           ? <div className={styles.revisionsEmpty}>{localize('DeletedMessagesLoading')}</div>
-          : (
-            <div>
-              {revisions.map((revision) => (
-                <div key={revision.capturedAt} className={styles.revision}>
-                  <div className={styles.revisionMeta}>
-                    <span>{localize('DeletedMessagesEditHistoryRevision')}</span>
-                    <span>{formatCaptureDate(revision.editDate)}</span>
+          : revisions.length === 0
+            ? <div className={styles.revisionsEmpty}>{localize('DeletedMessagesEditHistoryEmpty')}</div>
+            : (
+              <div>
+                {revisions.map((revision) => (
+                  <div key={revision.capturedAt} className={styles.revision}>
+                    <div className={styles.revisionMeta}>
+                      <span>{localize('DeletedMessagesEditHistoryRevision')}</span>
+                      <span>{formatCaptureDate(revision.editDate)}</span>
+                    </div>
+                    <div className={styles.revisionText} dir="auto">{revision.text.text}</div>
                   </div>
-                  <div className={styles.revisionText} dir="auto">{revision.text.text}</div>
-                </div>
-              ))}
-            </div>
-          )
+                ))}
+              </div>
+            )
       )}
     </div>
   );

@@ -356,6 +356,34 @@ describe('storage engine: usage accounting', () => {
     expect(usage.usedBytes).toBe(20);
     expect(usage.budgetBytes).toBe(Math.min(DEFAULT_BUDGET_BYTES, Math.floor(usage.quotaBytes * 0.5)));
   });
+
+  it('does not seed usage on a fresh store even when the origin estimate overflows the budget', async () => {
+    // A fresh store (no persisted usage counter, no blob index) with an
+    // origin-wide estimate far above the budget: seeding from the estimate
+    // would reject every blob write forever (nothing to evict), so a fresh
+    // store starts at zero and the first blob fits
+    const recordBackend = createMemoryRecordBackend();
+    const blobBackend = createMemoryBlobBackend();
+    const clock = createFakeClock();
+    const services: TgStorageServices = {
+      recordBackend,
+      blobBackend,
+      // The origin reports 400 of 1000 quota used — far above the 500 budget
+      estimator: createFakeEstimator(1000, 400),
+      now: clock.now,
+      logError: vi.fn(),
+    };
+    const engine = await createStorageEngine(services);
+    await engine.setBudgetBytes(500);
+    await engine.setPerBlobCapBytes(1024 * 1024);
+
+    expect((await engine.getUsage()).usedBytes).toBe(0);
+
+    const result = await engine.putBlob('plugin-a:fresh', createBlob(60));
+
+    expect(result).toEqual({ isStored: true });
+    expect((await engine.getUsage()).usedBytes).toBe(60);
+  });
 });
 
 describe('storage engine: persist', () => {

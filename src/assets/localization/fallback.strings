@@ -531,6 +531,7 @@
 "DeletedMessagesCopied" = "Copied";
 "DeletedMessagesMediaPlaceholder" = "Media";
 "DeletedMessagesEditHistory" = "Edit history";
+"DeletedMessagesEditHistoryEmpty" = "No earlier revisions.";
 "DeletedMessagesEditHistoryCount" = "{count} edits";
 "DeletedMessagesEditHistoryRevision" = "Before edit";
 "DeletedMessagesMediaPhoto" = "Photo";

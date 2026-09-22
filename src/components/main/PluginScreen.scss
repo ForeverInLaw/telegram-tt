@@ -31,7 +31,7 @@
   align-items: center;
 
   min-height: var(--middle-header-height);
-  padding: 0.5rem max(1rem, env(safe-area-inset-left)) 0.5rem max(0.5rem, env(safe-area-inset-left));
+  padding: 0.5rem max(1rem, env(safe-area-inset-right)) 0.5rem max(0.5rem, env(safe-area-inset-left));
 }
 
 .PluginScreen-title {

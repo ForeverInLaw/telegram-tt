@@ -63,8 +63,15 @@ async function copyMessageMedia(
   await recordWrite;
   const storedRecord = await tg.storage.getRecord<AntiDeleteCaptureRecord>(buildCaptureKey(chatId, messageId));
   if (storedRecord === undefined) {
-    // The record write failed; the blob stands alone until the next capture.
-    tg.util.log('media capture found no record to enrich');
+    // The record write failed: without an owning record the blobs would sit
+    // in budgeted storage forever unreferenced, so this copy cleans up
+    // (best-effort — a failed removal logs and leaves the blob to the LRU)
+    tg.util.log('media capture found no record to enrich; removing just-stored blobs');
+    await Promise.all(mediaRefs.map(({ key }) => (
+      tg.storage.deleteBlob(key).catch((err) => {
+        tg.util.log('orphan blob removal failed', err);
+      })
+    )));
     return;
   }
 
