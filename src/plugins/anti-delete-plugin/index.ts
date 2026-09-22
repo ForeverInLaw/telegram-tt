@@ -4,6 +4,7 @@ import { definePlugin } from '../types';
 
 import { createArchive } from './archive';
 import { buildCaptureKey, buildCaptureRecord, isServiceMessage } from './capture';
+import { captureRevisionFromUpdate } from './revisions';
 import { getSettings, loadSettings, resetSettings } from './settings';
 import { registerSettingsPanelGlue } from './registerPanel';
 import { createArchiveViewerScreen } from './viewer';
@@ -50,10 +51,16 @@ export default definePlugin({
     const unsubscribe = tg.on('message:deleted', (payload) => {
       captureDeletedMessages(tg, payload);
     });
+    // Edit history: a separate, self-contained subscription so parallel
+    // pipelines (media capture) merge trivially
+    const unsubscribeEdits = tg.on('message:edited', (payload) => {
+      captureRevisionFromUpdate(tg, payload);
+    });
 
     return () => {
       unregisterPanel?.();
       unsubscribe();
+      unsubscribeEdits();
       resetSettings();
       runtimeArchive = undefined;
     };

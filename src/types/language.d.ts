@@ -467,6 +467,8 @@ export interface LangPair {
   'DeletedMessagesLoading': undefined;
   'DeletedMessagesCopied': undefined;
   'DeletedMessagesMediaPlaceholder': undefined;
+  'DeletedMessagesEditHistory': undefined;
+  'DeletedMessagesEditHistoryRevision': undefined;
   'PrivacyPhone': undefined;
   'PrivacyLastSeen': undefined;
   'PrivacyProfilePhoto': undefined;
@@ -2537,6 +2539,9 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'AutodownloadSizeLimitUpTo': {
     'limit': V;
+  };
+  'DeletedMessagesEditHistoryCount': {
+    'count': V;
   };
   'AutoDeleteSetInfo': {
     'time': V;

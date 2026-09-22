@@ -1,7 +1,9 @@
 import type { TgPluginApi } from '../types';
 import type { AntiDeleteCaptureRecord } from './capture';
+import type { AntiDeleteRevisionRecord } from './revisions';
 
 import { buildCaptureKeyPrefix } from './capture';
+import { buildRevisionChatKeyPrefix, buildRevisionKeyPrefix } from './revisions';
 
 /** Read options for `AntiDeleteArchive.readCaptures`; both fields optional. */
 export interface AntiDeleteReadOptions {
@@ -51,6 +53,11 @@ export interface AntiDeleteArchive {
   clearCaptures: (chatId: string) => Promise<void>;
   /** Number of captured deletions currently stored for one chat. */
   getCaptureCount: (chatId: string) => Promise<number>;
+  /**
+   * Lists one message's captured edit revisions newest-first (the revision
+   * keys flip the edit date, so ascending storage order runs newest first).
+   */
+  readRevisions: (chatId: string, messageId: number) => Promise<AntiDeleteRevisionRecord[]>;
 }
 
 /**
@@ -97,14 +104,22 @@ export function createArchive(tg: TgPluginApi): AntiDeleteArchive {
   }
 
   async function clearCaptures(chatId: string): Promise<void> {
-    const prefix = buildCaptureKeyPrefix(chatId);
+    // Per-chat clear wipes both record kinds: captures and edit revisions
+    await clearRecordsByPrefix(buildCaptureKeyPrefix(chatId));
+    await clearRecordsByPrefix(buildRevisionChatKeyPrefix(chatId));
+  }
+
+  async function readRevisions(chatId: string, messageId: number): Promise<AntiDeleteRevisionRecord[]> {
+    const prefix = buildRevisionKeyPrefix(chatId, messageId);
+    const revisions: AntiDeleteRevisionRecord[] = [];
     let cursor: string | undefined;
     do {
-      const page = await storage.listRecords<AntiDeleteCaptureRecord>({ prefix, cursor });
-
-      await Promise.all(page.items.map(({ key }) => storage.deleteRecord(key)));
+      const page = await storage.listRecords<AntiDeleteRevisionRecord>({ prefix, cursor });
+      revisions.push(...page.items.map(({ record }) => record));
       cursor = page.cursor;
     } while (cursor !== undefined);
+
+    return revisions;
   }
 
   async function getCaptureCount(chatId: string): Promise<number> {
@@ -120,5 +135,16 @@ export function createArchive(tg: TgPluginApi): AntiDeleteArchive {
     return count;
   }
 
-  return { readCaptures, searchCaptures, clearCaptures, getCaptureCount };
+  /** Removes every record under one key prefix, cursor-paged. */
+  async function clearRecordsByPrefix(prefix: string): Promise<void> {
+    let cursor: string | undefined;
+    do {
+      const page = await storage.listRecords<AntiDeleteCaptureRecord>({ prefix, cursor });
+
+      await Promise.all(page.items.map(({ key }) => storage.deleteRecord(key)));
+      cursor = page.cursor;
+    } while (cursor !== undefined);
+  }
+
+  return { readCaptures, searchCaptures, clearCaptures, getCaptureCount, readRevisions };
 }

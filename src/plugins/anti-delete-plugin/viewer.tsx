@@ -6,6 +6,7 @@ import {
 import type { TgPluginApi, TgTeactNode } from '../types';
 import type { AntiDeleteArchive } from './archive';
 import type { AntiDeleteCaptureRecord } from './capture';
+import type { AntiDeleteRevisionRecord } from './revisions';
 
 import { copyTextToClipboard } from '../../util/clipboard';
 import { formatDateToString } from '../../util/dates/oldDateFormat';
@@ -14,6 +15,7 @@ import styles from './viewer.module.scss';
 
 /** App lang key, derived from the contract so the plugin stays policy-clean. */
 type ViewerLangKey = Parameters<TgPluginApi['util']['getLocalizedString']>[0];
+type ViewerLangVariables = Parameters<TgPluginApi['util']['getLocalizedString']>[1];
 
 /** Page size for the archive walk; one screen holds far less than this. */
 const PAGE_LIMIT = 50;
@@ -31,7 +33,7 @@ type OwnProps = {
   archive: AntiDeleteArchive;
   chatId: string;
   /** Translates app lang keys; `tg.util.getLocalizedString` in production. */
-  localize: (key: ViewerLangKey) => string;
+  localize: (key: ViewerLangKey, variables?: ViewerLangVariables) => string;
 };
 
 /**
@@ -152,7 +154,7 @@ const ArchiveViewer: FC<OwnProps> = ({ archive, chatId, localize }) => {
           </div>
         )}
         {captures?.map((capture) => (
-          renderCaptureRow(capture, localize, copiedMessageIds, handleCopy)
+          renderCaptureRow(archive, capture, localize, copiedMessageIds, handleCopy)
         ))}
       </div>
       {isClearConfirmShown && (
@@ -182,6 +184,66 @@ const ArchiveViewer: FC<OwnProps> = ({ archive, chatId, localize }) => {
   );
 };
 
+/**
+ * The per-row edit-history expander: stays hidden until tapped (revisions
+ * load lazily — the viewer never scans revision records upfront), then lists
+ * the message's captured pre-edit revisions newest-first, each with its
+ * edit date and text. The capture row itself is the final state for a
+ * deleted message, so the list reads as before/after.
+ */
+const RevisionExpander: FC<{
+  archive: AntiDeleteArchive;
+  capture: AntiDeleteCaptureRecord;
+  localize: (key: ViewerLangKey, variables?: ViewerLangVariables) => string;
+}> = ({ archive, capture, localize }) => {
+  const [revisions, setRevisions] = useState<AntiDeleteRevisionRecord[] | undefined>(undefined);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isLoadingRef = useRef(false);
+
+  // Loads the revisions on first expand only; a later collapse/expand reuses
+  // the loaded list.
+  const handleExpand = () => {
+    if (isExpanded || isLoadingRef.current) {
+      setIsExpanded(!isExpanded);
+      return;
+    }
+
+    isLoadingRef.current = true;
+    void archive.readRevisions(capture.chatId, capture.messageId).then((records) => {
+      isLoadingRef.current = false;
+      setRevisions(records);
+      setIsExpanded(true);
+    }).catch(() => {
+      isLoadingRef.current = false;
+    });
+  };
+
+  return (
+    <div className={styles.revisions}>
+      <button type="button" className={styles.revisionsToggle} onClick={handleExpand}>
+        {localize('DeletedMessagesEditHistory')}
+      </button>
+      {isExpanded && (
+        revisions === undefined || revisions.length === 0
+          ? <div className={styles.revisionsEmpty}>{localize('DeletedMessagesLoading')}</div>
+          : (
+            <div>
+              {revisions.map((revision) => (
+                <div key={revision.editDate} className={styles.revision}>
+                  <div className={styles.revisionMeta}>
+                    <span>{localize('DeletedMessagesEditHistoryRevision')}</span>
+                    <span>{formatCaptureDate(revision.editDate)}</span>
+                  </div>
+                  <div className={styles.revisionText} dir="auto">{revision.text.text}</div>
+                </div>
+              ))}
+            </div>
+          )
+      )}
+    </div>
+  );
+};
+
 /** Lang key per deletion source, for the per-row "why it went" label. */
 const SOURCE_LANG_KEYS: Record<AntiDeleteCaptureRecord['source'], 'DeletedMessagesSourceDelete'
   | 'DeletedMessagesSourceHistoryClear' | 'DeletedMessagesSourceTtl'> = {
@@ -191,8 +253,9 @@ const SOURCE_LANG_KEYS: Record<AntiDeleteCaptureRecord['source'], 'DeletedMessag
 };
 
 function renderCaptureRow(
+  archive: AntiDeleteArchive,
   capture: AntiDeleteCaptureRecord,
-  localize: (key: ViewerLangKey) => string,
+  localize: (key: ViewerLangKey, variables?: ViewerLangVariables) => string,
   copiedMessageIds: number[],
   onCopy: (capture: AntiDeleteCaptureRecord) => void,
 ) {
@@ -217,13 +280,14 @@ function renderCaptureRow(
           <span className={styles.mediaType}>{capture.content.type}</span>
         </div>
       )}
-      {text.length > 0 && (
-        <div className={styles.rowFooter}>
+      <div className={styles.rowFooter}>
+        <RevisionExpander archive={archive} capture={capture} localize={localize} />
+        {text.length > 0 && (
           <button type="button" className={styles.copyButton} onClick={() => onCopy(capture)}>
             {isCopied ? localize('DeletedMessagesCopied') : localize('Copy')}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -247,7 +311,7 @@ function stopEventPropagation(e: React.SyntheticEvent) {
 export function createArchiveViewerScreen(
   archive: AntiDeleteArchive,
   chatId: string,
-  localize: (key: ViewerLangKey) => string,
+  localize: (key: ViewerLangKey, variables?: ViewerLangVariables) => string,
 ): { title: string; render: () => TgTeactNode } {
   return {
     title: localize('DeletedMessages'),
