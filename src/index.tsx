@@ -41,6 +41,10 @@ import './styles/index.scss';
 // the only potentially slow part of plugin init; it must complete before any
 // plugin writes, so awaiting here is the exact seam. The translation fn is
 // injected because the plugin layer must not import its module directly.
+// ORDERING: this module's `addActionHandler('apiUpdate')` registration must
+// stay BEFORE the apiUpdaters load (`Main` → `global/actions/all`) — handlers
+// run in registration order, and the plugin capture model depends on the
+// fan-out preceding the native reducers (see src/plugins/runtime.ts).
 await initPlugins(createPluginRuntime(getTranslationFn));
 
 if (STRICTERDOM_ENABLED) {

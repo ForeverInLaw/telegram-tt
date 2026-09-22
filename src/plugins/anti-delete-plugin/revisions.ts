@@ -38,6 +38,9 @@ const KEY_FLIP_BASE = 9_999_999_999;
 const KEY_ID_WIDTH = 10;
 const KEY_PREFIX = 'revision';
 
+/** The prefix every revision key starts with (`revision:`). */
+export const REVISION_KEY_ROOT_PREFIX = `${KEY_PREFIX}:`;
+
 /** Builds the `listRecords` prefix holding one message's whole revision list. */
 export function buildRevisionKeyPrefix(chatId: string, messageId: number): string {
   return `${KEY_PREFIX}:${chatId}:${messageId}:`;
@@ -50,11 +53,17 @@ export function buildRevisionChatKeyPrefix(chatId: string): string {
 
 /**
  * Builds one revision's storage key:
- * `revision:<chatId>:<messageId>:<flipped edit date>`.
+ * `revision:<chatId>:<messageId>:<flipped edit date>:<capturedAt>`. The
+ * flipped edit date keeps ascending order newest-first; the `capturedAt`
+ * milliseconds disambiguate two edits landing in the same server second, so
+ * the later revision never overwrites the earlier one.
  */
-export function buildRevisionKey(chatId: string, messageId: number, editDate: number): string {
+export function buildRevisionKey(
+  chatId: string, messageId: number, editDate: number, capturedAt?: number,
+): string {
   const flippedDate = String(KEY_FLIP_BASE - editDate).padStart(KEY_ID_WIDTH, '0');
-  return `${buildRevisionKeyPrefix(chatId, messageId)}${flippedDate}`;
+  const suffix = capturedAt === undefined ? '' : `:${capturedAt}`;
+  return `${buildRevisionKeyPrefix(chatId, messageId)}${flippedDate}${suffix}`;
 }
 
 /**
@@ -71,9 +80,6 @@ export function captureRevisionFromUpdate(tg: TgPluginApi, payload: TgMessageEdi
   // builder sets it from the server edit date)
   if (!message.isEdited) return;
 
-  // This client's own edits are not archive material
-  if (tg.store.getCurrentUserId() === message.senderId) return;
-
   // Bot chats follow the bots toggle; ambiguous detections default to capturing
   if (!getSettings().shouldCaptureBots && isBotChat(tg, chatId)) return;
 
@@ -81,6 +87,11 @@ export function captureRevisionFromUpdate(tg: TgPluginApi, payload: TgMessageEdi
   // the snapshot must happen right here, synchronously.
   const storedMessage = tg.store.getMessage(chatId, messageId);
   if (storedMessage === undefined) return;
+
+  // The partial update carries `senderId` only on full-message edits; the
+  // stored message is the reliable source for the own-edit exclusion
+  const senderId = message.senderId ?? storedMessage.senderId;
+  if (tg.store.getCurrentUserId() === senderId) return;
 
   // Service notifications carry no recoverable content
   if (isServiceMessage(storedMessage)) return;
@@ -90,11 +101,19 @@ export function captureRevisionFromUpdate(tg: TgPluginApi, payload: TgMessageEdi
   const text = storedMessage.content.text;
   if (text === undefined) return;
 
+  // A full-message `updateMessage` with `isEdited` set arrives without a
+  // text change too (channel edit broadcasts): an identical text means no
+  // revision to keep
+  if (message.content?.text?.text !== undefined && message.content.text.text === text.text) return;
+
   const record = buildRevisionRecord(chatId, messageId, storedMessage, message);
 
   // The write is async by contract; the slice contains backend errors, and
   // this catch guards the chain itself so a throw never reaches the host
-  void tg.storage.putRecord(buildRevisionKey(chatId, messageId, record.editDate), record).catch((err) => {
+  void tg.storage.putRecord(
+    buildRevisionKey(chatId, messageId, record.editDate, record.capturedAt),
+    record,
+  ).catch((err) => {
     tg.util.log('revision persist failed', err);
   });
 }

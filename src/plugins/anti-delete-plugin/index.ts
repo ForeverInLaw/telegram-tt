@@ -1,5 +1,6 @@
 import type { TgMessageDeletedPayload, TgPluginApi } from '../types';
 import type { AntiDeleteArchive } from './archive';
+import type { AntiDeleteCaptureRecord } from './capture';
 import { definePlugin } from '../types';
 
 import { createArchive } from './archive';
@@ -7,7 +8,7 @@ import { buildCaptureKey, buildCaptureRecord, isServiceMessage } from './capture
 import { captureMessageMedia } from './mediaCapture';
 import { registerSettingsPanelGlue } from './registerPanel';
 import { captureRevisionFromUpdate, isBotChat } from './revisions';
-import { getSettings, loadSettings, resetSettings } from './settings';
+import { areSettingsReady, getSettings, loadSettings, resetSettings } from './settings';
 import { createArchiveViewerScreen } from './viewer';
 
 /**
@@ -92,6 +93,10 @@ export function getArchive(): AntiDeleteArchive | undefined {
 function captureDeletedMessages(tg: TgPluginApi, payload: TgMessageDeletedPayload): void {
   const { source, items } = payload;
 
+  // Deletions arriving before the persisted settings settle would capture
+  // against defaults; skipping keeps the user's toggles authoritative
+  if (!areSettingsReady()) return;
+
   for (const item of items) {
     // This client's own deletions are not archive material
     if (item.isLocal) continue;
@@ -118,13 +123,19 @@ function captureDeletedMessages(tg: TgPluginApi, payload: TgMessageDeletedPayloa
       : resolveSenderName(tg, message.senderId);
 
     const record = buildCaptureRecord(item.chatId, item.messageId, message, source, senderName);
+    const captureKey = buildCaptureKey(item.chatId, item.messageId);
 
     // The write is async by contract; the slice contains backend errors, and
-    // this catch guards the chain itself so a throw never reaches the host
-    const recordWrite = tg.storage.putRecord(
-      buildCaptureKey(item.chatId, item.messageId),
-      record,
-    ).catch((err) => {
+    // this catch guards the chain itself so a throw never reaches the host.
+    // A record may already exist (a re-emitted deletion): the merge keeps
+    // its copied media refs, so a re-capture never orphans stored blobs.
+    const recordWrite = tg.storage.getRecord<AntiDeleteCaptureRecord>(captureKey).then((existing) => {
+      const mergedRecord = existing === undefined ? record : {
+        ...record,
+        media: existing.media,
+      };
+      return tg.storage.putRecord(captureKey, mergedRecord);
+    }).catch((err) => {
       tg.util.log('capture persist failed', err);
     });
 

@@ -89,6 +89,9 @@ const KEY_FLIP_BASE = 9_999_999_999;
 const KEY_ID_WIDTH = 10;
 const KEY_PREFIX = 'capture';
 
+/** The prefix every capture key starts with (`capture:`). */
+export const CAPTURE_KEY_ROOT_PREFIX = `${KEY_PREFIX}:`;
+
 /** Builds the `listRecords` prefix holding one chat's whole capture archive. */
 export function buildCaptureKeyPrefix(chatId: string): string {
   return `${KEY_PREFIX}:${chatId}:`;

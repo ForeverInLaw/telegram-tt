@@ -75,7 +75,7 @@ interface TestHarness {
   /** The fake store's message table; keyed `<chatId>:<messageId>`. */
   messages: Map<string, ApiMessage>;
   /** Builds the plugin's `tg` object and runs `setup` — one lifetime. */
-  startPlugin(): { tg: TgPluginApi; dispose: () => void };
+  startPlugin(): Promise<{ tg: TgPluginApi; dispose: () => void }>;
   emitApiUpdate: (update: ApiUpdate) => void;
 }
 
@@ -130,10 +130,13 @@ function createTestHarness(): TestHarness {
     /** The fake store's message table; keyed `<chatId>:<messageId>`. */
     messages,
     /** Builds the plugin's `tg` object and runs `setup` — one lifetime. */
-    startPlugin(): { tg: TgPluginApi; dispose: () => void } {
+    async startPlugin(): Promise<{ tg: TgPluginApi; dispose: () => void }> {
       const context = createPluginContext(PLUGIN_NAME, runtime.createPluginReporter(PLUGIN_NAME));
       const tg = buildTgApi(context, runtime);
       const disposer = antiDeletePlugin.setup(tg);
+      // The real app awaits plugin init before any update flows; settle the
+      // async settings load the same way so captures run with real settings
+      await flushAsync();
       return { tg, dispose: () => disposer?.() };
     },
     emitApiUpdate: (update: ApiUpdate) => {
@@ -238,7 +241,7 @@ afterEach(() => {
 
 describe('anti-delete plugin: revision capture round-trip', () => {
   it('captures a real edit as the PRE-EDIT revision, readable back with ids and edit date', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 501, 'The original wording');
 
     // The event fires in the same dispatch, BEFORE the native reducer applies
@@ -268,7 +271,7 @@ describe('anti-delete plugin: revision capture round-trip', () => {
   });
 
   it('captures successive edits as an ordered, newest-first revision list', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 502, 'Revision zero');
 
     for (const [index, editDate] of [1730000100, 1730000200, 1730000300].entries()) {
@@ -301,7 +304,7 @@ describe('anti-delete plugin: revision capture round-trip', () => {
 
 describe('anti-delete plugin: revision capture filters', () => {
   it('skips this client\'s own edits (sender is the current user)', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     const ownMessage = {
       id: 601,
       chatId: TEST_CHAT_ID,
@@ -332,7 +335,7 @@ describe('anti-delete plugin: revision capture filters', () => {
   });
 
   it('skips non-edit updates: reactions, poll votes and web-page previews ride the same event', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 602, 'A message with reactions coming');
 
     emitNonEdit(harness, 602, { reactions: { recentReactions: [] } as ApiMessage['reactions'] });
@@ -346,7 +349,7 @@ describe('anti-delete plugin: revision capture filters', () => {
   });
 
   it('skips edits of messages no longer in the store (nothing to snapshot)', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     emitEdit(harness, 9999, 'Never stored', 1730000500);
     await flushAsync();
 
@@ -356,7 +359,7 @@ describe('anti-delete plugin: revision capture filters', () => {
   });
 
   it('skips media-only edits (revisions are text + metadata only)', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     const photoMessage = {
       id: 603,
       chatId: TEST_CHAT_ID,
@@ -378,7 +381,7 @@ describe('anti-delete plugin: revision capture filters', () => {
 
 describe('anti-delete plugin: revision bots toggle', () => {
   it('skips bot-chat edits while the toggle is off, without a reload', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     updateSettings({ shouldCaptureBots: false });
 
     storeMessage(harness, 701, 'Bot wrote this', TEST_BOT_CHAT_ID);
@@ -391,7 +394,7 @@ describe('anti-delete plugin: revision bots toggle', () => {
   });
 
   it('captures bot-chat edits again once the toggle is back on', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     updateSettings({ shouldCaptureBots: false });
 
     storeMessage(harness, 702, 'Bot wrote this', TEST_BOT_CHAT_ID);
@@ -412,7 +415,7 @@ describe('anti-delete plugin: revision bots toggle', () => {
   });
 
   it('captures bot-chat edits by default', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 704, 'Bot noise', TEST_BOT_CHAT_ID);
     emitEdit(harness, 704, 'Bot edited noise', 1730000500, TEST_BOT_CHAT_ID);
     await flushAsync();
@@ -423,7 +426,7 @@ describe('anti-delete plugin: revision bots toggle', () => {
   });
 
   it('captures group-chat edits even while the bots toggle is off', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     updateSettings({ shouldCaptureBots: false });
 
     const groupChatId = '600';
@@ -446,7 +449,7 @@ describe('anti-delete plugin: revision bots toggle', () => {
 
 describe('anti-delete plugin: revisions and the delete pipeline', () => {
   it('keeps revisions of an edited-then-deleted message attached via ids (both records coexist)', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 801, 'Edited then deleted');
     emitEdit(harness, 801, 'Edited then deleted v2', 1730000500);
     applyEditToStore(harness, 801, 'Edited then deleted v2', 1730000500);
@@ -470,7 +473,7 @@ describe('anti-delete plugin: revisions and the delete pipeline', () => {
   });
 
   it('per-chat clear removes revisions together with captures', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 802, 'Will be edited and cleared');
     emitEdit(harness, 802, 'Will be edited and cleared v2', 1730000500);
     applyEditToStore(harness, 802, 'Will be edited and cleared v2', 1730000500);
@@ -490,7 +493,7 @@ describe('anti-delete plugin: revisions and the delete pipeline', () => {
   });
 
   it('disables revision capture on plugin dispose (unsubscribes the edit event)', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 804, 'Captured before disabling');
     emitEdit(harness, 804, 'Captured before disabling v2', 1730000500);
     await flushAsync();

@@ -335,7 +335,7 @@ const RevisionExpander: FC<{
           : (
             <div>
               {revisions.map((revision) => (
-                <div key={revision.editDate} className={styles.revision}>
+                <div key={revision.capturedAt} className={styles.revision}>
                   <div className={styles.revisionMeta}>
                     <span>{localize('DeletedMessagesEditHistoryRevision')}</span>
                     <span>{formatCaptureDate(revision.editDate)}</span>

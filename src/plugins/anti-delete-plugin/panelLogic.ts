@@ -1,5 +1,7 @@
 import type { TgStorageUsage } from '../types';
 
+import { CAPTURE_KEY_ROOT_PREFIX } from './capture';
+import { REVISION_KEY_ROOT_PREFIX } from './revisions';
 import { getSettings, updateSettings } from './settings';
 
 /** Bytes per binary gigabyte; the budget slider's unit. */
@@ -90,18 +92,37 @@ export function applyPerBlobCapMb(megabytes: number): number {
 }
 
 /**
- * Wipes the whole archive for the current account: every capture record and
- * every blob of this plugin. The storage slice scopes both calls to the
- * plugin's namespace, and the engine resets the shared usage accounting —
- * the usage bar reads zero on its next poll.
+ * Wipes the whole archive for the current account: every capture record,
+ * every revision record and every blob of this plugin. The plugin's own
+ * settings record (`settings` key) survives, so toggles, budget and cap
+ * stay as the user set them; the engine resets the shared usage
+ * accounting — the usage bar reads zero on its next poll.
  */
 export async function clearAllArchive(tg: {
   storage: {
-    clearRecords: () => Promise<void>;
+    listRecords: (options?: { prefix?: string; cursor?: string }) => Promise<{
+      items: Array<{ key: string }>; cursor?: string;
+    }>;
+    deleteRecord: (key: string) => Promise<void>;
     clearBlobs: () => Promise<void>;
   };
 }): Promise<void> {
-  await Promise.all([tg.storage.clearRecords(), tg.storage.clearBlobs()]);
+  const archiveKeyPrefixes = [CAPTURE_KEY_ROOT_PREFIX, REVISION_KEY_ROOT_PREFIX];
+
+  const recordKeys: string[] = [];
+  for (const prefix of archiveKeyPrefixes) {
+    let cursor: string | undefined;
+    do {
+      const page = await tg.storage.listRecords({ prefix, cursor });
+      recordKeys.push(...page.items.map(({ key }) => key));
+      cursor = page.cursor;
+    } while (cursor !== undefined);
+  }
+
+  await Promise.all([
+    ...recordKeys.map((key) => tg.storage.deleteRecord(key)),
+    tg.storage.clearBlobs(),
+  ]);
 }
 
 /** The panel's view of one storage usage snapshot plus the slider bounds derived from it. */

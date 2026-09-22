@@ -971,16 +971,22 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       }
 
       if (chatMessages) {
-        const ids = Object.keys(chatMessages.byId).map(Number);
-        // Dispatched through the apiUpdate handler (which funnels back into the
-        // shared `deleteMessages` updater) so the deletion carries
+        // Ghosts are already retained (`isArchivedDeleted`): re-emitting
+        // them would re-capture and clobber their archive records
+        const ids = Object.keys(chatMessages.byId)
+          .map(Number)
+          .filter((id) => !chatMessages.byId[id].isArchivedDeleted);
+        // Dispatched through the apiUpdate handler (which funnels back into
+        // the shared `deleteMessages` updater) so the deletion carries
         // `source: 'historyClear'` for the plugin layer.
-        actions.apiUpdate({
-          '@type': 'deleteMessages',
-          ids,
-          chatId,
-          source: 'historyClear',
-        });
+        if (ids.length) {
+          actions.apiUpdate({
+            '@type': 'deleteMessages',
+            ids,
+            chatId,
+            source: 'historyClear',
+          });
+        }
       } else {
         actions.requestChatUpdate({ chatId });
       }
@@ -1536,6 +1542,9 @@ export function deleteParticipantHistory<T extends GlobalState>(
   actions: RequiredGlobalActions,
 ) {
   const byId = selectChatMessages(global, chatId);
+  if (!byId) {
+    return;
+  }
 
   const messageIds = Object.values(byId).filter((message) => {
     return message.senderId === peerId;
@@ -1576,7 +1585,15 @@ export function deleteThread<T extends GlobalState>(
     return;
   }
 
-  deleteMessages(global, chatId, messageIds, actions);
+  // Dispatched through the apiUpdate handler (which funnels back into the
+  // shared `deleteMessages` updater) so the deletion reaches the plugin
+  // layer with a `source`; calling the updater directly would bypass it
+  actions.apiUpdate({
+    '@type': 'deleteMessages',
+    ids: messageIds,
+    chatId,
+    source: 'delete',
+  });
 }
 
 export function deleteMessages<T extends GlobalState>(

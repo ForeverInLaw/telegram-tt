@@ -43,8 +43,18 @@ function createFakeStorage(overrides?: Partial<TgPluginApi['storage']>) {
     getRecord: <T>(key: string) => (
       Promise.resolve(records.get(`${PLUGIN_NAME}:${key}`) as T | undefined)
     ),
-    listRecords: () => Promise.resolve({ items: [] }),
-    deleteRecord: () => Promise.resolve(),
+    listRecords: <T>(options?: { prefix?: string }) => {
+      const prefix = options?.prefix === undefined
+        ? `${PLUGIN_NAME}:` : `${PLUGIN_NAME}:${options.prefix}`;
+      const items = [...records.entries()]
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([key, record]) => ({ key: key.slice(`${PLUGIN_NAME}:`.length), record: record as T }));
+      return Promise.resolve({ items });
+    },
+    deleteRecord: (key: string) => {
+      records.delete(`${PLUGIN_NAME}:${key}`);
+      return Promise.resolve();
+    },
     clearRecords: vi.fn(() => {
       for (const key of [...records.keys()]) {
         if (key.startsWith(`${PLUGIN_NAME}:capture:`)) records.delete(key);
@@ -152,8 +162,9 @@ describe('anti-delete plugin: settings panel logic', () => {
     // The plugin's own record keeps the chosen position (survives reloads)...
     const persisted = records.get(`${PLUGIN_NAME}:${SETTINGS_KEY}`) as Record<string, unknown>;
     expect(persisted.budgetBytes).toBe(12 * BYTES_PER_GB);
-    // ...and the engine handle receives the same bytes (it clamps at runtime).
-    expect(setBudgetBytesCalls).toEqual([12 * BYTES_PER_GB]);
+    // ...and the engine handle receives the load push (defaults) then the
+    // slider move (it clamps at runtime).
+    expect(setBudgetBytesCalls).toEqual([DEFAULT_BUDGET_BYTES, 12 * BYTES_PER_GB]);
   });
 
   it('clamps the budget slider maximum to 50% of a low quota', () => {
@@ -187,7 +198,8 @@ describe('anti-delete plugin: settings panel logic', () => {
     expect(writtenBytes).toBe(256 * BYTES_PER_MB);
     const persisted = records.get(`${PLUGIN_NAME}:${SETTINGS_KEY}`) as Record<string, unknown>;
     expect(persisted.perBlobCapBytes).toBe(256 * BYTES_PER_MB);
-    expect(setPerBlobCapBytesCalls).toEqual([256 * BYTES_PER_MB]);
+    // The engine handle receives the load push (defaults) then the slider move
+    expect(setPerBlobCapBytesCalls).toEqual([DEFAULT_PER_BLOB_CAP_BYTES, 256 * BYTES_PER_MB]);
   });
 
   it('clamps the per-blob cap slider position to the spec bounds', () => {
@@ -205,18 +217,22 @@ describe('anti-delete plugin: settings panel logic', () => {
     expect(overflowingView.perBlobCapMb).toBe(512);
   });
 
-  it('clears every record and blob for the account through the storage slice', async () => {
+  it('clears every archive record and blob, keeping the settings record', async () => {
     const { records, storage } = createFakeStorage();
     const tg = createTestTg(storage);
     records.set(`${PLUGIN_NAME}:capture:100:0000000001`, { text: 'gone' });
     records.set(`${PLUGIN_NAME}:capture:100:0000000002`, { text: 'gone too' });
+    records.set(`${PLUGIN_NAME}:revision:100:7:0000000001`, { text: 'revision gone' });
+    records.set(`${PLUGIN_NAME}:settings`, { shouldCaptureBots: false });
 
     await clearAllArchive(tg);
     await flushAsync();
 
-    expect(storage.clearRecords).toHaveBeenCalled();
     expect(storage.clearBlobs).toHaveBeenCalled();
     expect([...records.keys()].filter((key) => key.startsWith(`${PLUGIN_NAME}:capture:`))).toEqual([]);
+    expect([...records.keys()].filter((key) => key.startsWith(`${PLUGIN_NAME}:revision:`))).toEqual([]);
+    // The plugin's own settings record survives the archive wipe
+    expect(records.has(`${PLUGIN_NAME}:settings`)).toBe(true);
   });
 
   it('reads the usage bar values from the engine accounting', () => {

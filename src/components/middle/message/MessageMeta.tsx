@@ -13,6 +13,7 @@ import { formatDateTime, isSameLocalDay, secondsToDate } from '../../../util/loc
 import { formatStarsAsIcon } from '../../../util/localization/format';
 import { getRepeatPeriodText } from '../../../util/scheduledMessages';
 import { formatIntegerCompact } from '../../../util/textFormat';
+import { isAntiDeleteActive } from '../../../plugins/ghost';
 import renderText from '../../common/helpers/renderText';
 
 import useFlag from '../../../hooks/useFlag';
@@ -223,7 +224,7 @@ const MessageMeta = ({
             <span className="message-imported" onClick={handleImportedClick}>{lang('MessageMetaImported')}</span>
           </>
         )}
-        {message.isArchivedDeleted && (
+        {message.isArchivedDeleted && isAntiDeleteActive() && (
           <span className="message-archived-deleted">{lang('MessageArchivedDeleted')}</span>
         )}
         {message.isEdited && !shouldShowPrimaryEditedDate && `${lang('MessageMetaEdited')} `}

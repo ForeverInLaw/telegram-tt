@@ -41,18 +41,39 @@ export const DEFAULT_ANTI_DELETE_SETTINGS: AntiDeleteSettings = {
 // disposer clears both, so a disabled plugin owns no stale settings.
 
 let settingsCache: AntiDeleteSettings = { ...DEFAULT_ANTI_DELETE_SETTINGS };
+let areSettingsLoaded = false;
 let settingsTg: TgPluginApi | undefined;
+
+/** Whether the persisted settings record has settled into the cache this lifetime. */
+export function areSettingsReady(): boolean {
+  return areSettingsLoaded;
+}
 
 /**
  * Loads the settings into the in-memory cache for this lifetime. Called from
  * `setup`; missing fields fall back to the defaults, so a record written
- * before a new field existed loads cleanly.
+ * before a new field existed loads cleanly. Until the async read settles,
+ * `areSettingsReady` answers `false`: capture filters treat early deletions
+ * conservatively rather than trusting defaults over the user's persisted
+ * toggles.
  */
 export function loadSettings(tg: TgPluginApi): void {
   settingsTg = tg;
+  areSettingsLoaded = false;
 
   tg.storage.getRecord<PersistedSettings>(SETTINGS_KEY).then((stored) => {
     settingsCache = mergeSettings(stored);
+    areSettingsLoaded = true;
+
+    // The engine's META record and the plugin's settings can diverge (a
+    // wiped namespace, a manual record edit); the persisted settings are
+    // the source of truth, so they push into the engine on load
+    void tg.storage.setBudgetBytes(settingsCache.budgetBytes).catch((err) => {
+      tg.util.log('budget push failed', err);
+    });
+    void tg.storage.setPerBlobCapBytes(settingsCache.perBlobCapBytes).catch((err) => {
+      tg.util.log('per-blob cap push failed', err);
+    });
   }).catch((err) => {
     // The slice already contains backend errors; this guards the chain itself
     tg.util.log('settings load failed', err);
@@ -89,6 +110,7 @@ export function getSettings(): AntiDeleteSettings {
  */
 export function resetSettings(): void {
   settingsCache = { ...DEFAULT_ANTI_DELETE_SETTINGS };
+  areSettingsLoaded = false;
   settingsTg = undefined;
 }
 

@@ -2125,6 +2125,10 @@ function cleanupExpiredMessagesForChat(actions: RequiredGlobalActions, chatId: s
   messages.forEach((message) => {
     if (!message.ttlPeriod) return;
 
+    // Ghosts are already retained (`isArchivedDeleted`): the sweep keeps
+    // their timer from re-emitting them every pass
+    if (message.isArchivedDeleted) return;
+
     const expiresAt = message.date + message.ttlPeriod;
     if (expiresAt <= serverTime) {
       expiredIds.push(message.id);

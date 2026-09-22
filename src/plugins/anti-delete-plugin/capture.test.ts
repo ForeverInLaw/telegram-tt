@@ -138,10 +138,13 @@ function createTestHarness() {
       initEventStreams(runtime);
     },
     /** Builds the plugin's `tg` object and runs `setup` — one lifetime. */
-    startPlugin(): { tg: TgPluginApi; dispose: () => void } {
+    async startPlugin(): Promise<{ tg: TgPluginApi; dispose: () => void }> {
       const context = createPluginContext(PLUGIN_NAME, runtime.createPluginReporter(PLUGIN_NAME));
       const tg = buildTgApi(context, runtime);
       const disposer = antiDeletePlugin.setup(tg);
+      // The real app awaits plugin init before any update flows; settle the
+      // async settings load the same way so captures run with real settings
+      await flushAsync();
       return { tg, dispose: () => disposer?.() };
     },
     emitApiUpdate: (update: ApiUpdate) => {
@@ -198,7 +201,7 @@ afterEach(() => {
 
 describe('anti-delete plugin: capture round-trip', () => {
   it('captures a witnessed deletion readable back through the archive', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 501, 'Going to delete this');
     emitDeletion(harness, 501);
     await flushAsync();
@@ -227,7 +230,7 @@ describe('anti-delete plugin: capture round-trip', () => {
   });
 
   it('paginates the archive newest-first with a cursor', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     for (const messageId of [10, 20, 30, 40]) {
       storeMessage(harness, messageId, `Message ${messageId}`);
     }
@@ -248,7 +251,7 @@ describe('anti-delete plugin: capture round-trip', () => {
   });
 
   it('searches captures by text, case-insensitively', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 11, 'Plain note');
     storeMessage(harness, 12, 'URGENT memo');
     emitDeletion(harness, 11);
@@ -262,7 +265,7 @@ describe('anti-delete plugin: capture round-trip', () => {
   });
 
   it('counts and clears captures per chat, leaving other chats untouched', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 21, 'In chat 100');
     storeMessage(harness, 22, 'In bot chat', TEST_BOT_CHAT_ID);
     emitDeletion(harness, 21);
@@ -283,7 +286,7 @@ describe('anti-delete plugin: capture round-trip', () => {
 
 describe('anti-delete plugin: capture filters', () => {
   it('skips locally-initiated deletions', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 601, 'Deleted by me');
     harness.emitApiUpdate({ '@type': 'deleteMessages', ids: [601], chatId: TEST_CHAT_ID, isLocal: true });
     await flushAsync();
@@ -294,7 +297,7 @@ describe('anti-delete plugin: capture filters', () => {
   });
 
   it('skips deletions whose chat the app could not resolve', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     harness.emitApiUpdate({ '@type': 'deleteMessages', ids: [602] });
     await flushAsync();
 
@@ -304,7 +307,7 @@ describe('anti-delete plugin: capture filters', () => {
   });
 
   it('skips messages no longer in the store (nothing to snapshot)', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     emitDeletion(harness, 9999);
     await flushAsync();
 
@@ -314,7 +317,7 @@ describe('anti-delete plugin: capture filters', () => {
   });
 
   it('skips service notifications (chat actions carry no recoverable content)', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     const serviceMessage = {
       id: 603,
       chatId: TEST_CHAT_ID,
@@ -332,7 +335,7 @@ describe('anti-delete plugin: capture filters', () => {
   });
 
   it('captures media messages with a content summary instead of live media objects', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     const photoMessage = {
       id: 604,
       chatId: TEST_CHAT_ID,
@@ -370,7 +373,7 @@ describe('anti-delete plugin: capture filters', () => {
 
 describe('anti-delete plugin: bots toggle', () => {
   it('skips bot-chat deletions while the toggle is off, without a reload', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     updateSettings({ shouldCaptureBots: false });
 
     storeMessage(harness, 701, 'Bot says hi', TEST_BOT_CHAT_ID);
@@ -383,7 +386,7 @@ describe('anti-delete plugin: bots toggle', () => {
   });
 
   it('captures bot-chat deletions again once the toggle is back on', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     updateSettings({ shouldCaptureBots: false });
 
     storeMessage(harness, 702, 'Bot says hi', TEST_BOT_CHAT_ID);
@@ -404,7 +407,7 @@ describe('anti-delete plugin: bots toggle', () => {
   });
 
   it('captures bot-chat deletions by default', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 704, 'Bot noise', TEST_BOT_CHAT_ID);
     emitDeletion(harness, 704, TEST_BOT_CHAT_ID);
     await flushAsync();
@@ -415,7 +418,7 @@ describe('anti-delete plugin: bots toggle', () => {
   });
 
   it('captures group chats even while the bots toggle is off (detection is private-chats-only)', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     updateSettings({ shouldCaptureBots: false });
 
     const groupChatId = '600';
@@ -438,7 +441,7 @@ describe('anti-delete plugin: bots toggle', () => {
 
 describe('anti-delete plugin: snapshot race', () => {
   it('reads the message synchronously before the store removes it', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     const message = storeMessage(harness, 801, 'Still intact right now');
 
     // The native delete pipeline removes the message only after the update
@@ -461,7 +464,7 @@ describe('anti-delete plugin: snapshot race', () => {
 
 describe('anti-delete plugin: error containment', () => {
   it('contains a failing record write and keeps the plugin running', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeMessage(harness, 901, 'This write will fail');
 
     const originalPutRecord = harness.runtime.getStorageEngine;

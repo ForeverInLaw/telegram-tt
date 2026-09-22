@@ -132,7 +132,6 @@ import { selectThreadInfo, selectThreadReadState } from '../../../global/selecto
 import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import { IS_ANDROID, IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
-import { getSettings } from '../../../plugins/anti-delete-plugin/settings';
 import buildStyle from '../../../util/buildStyle';
 import { isUserId } from '../../../util/entities/ids';
 import { getMessageKey } from '../../../util/keys/messageKey';
@@ -140,6 +139,8 @@ import { parseTranslationCacheKey } from '../../../util/keys/translationKey';
 import { getServerTime } from '../../../util/serverTime';
 import stopEvent from '../../../util/stopEvent';
 import { isElementInViewport } from '../../../util/visibility/isElementInViewport';
+import { getSettings } from '../../../plugins/anti-delete-plugin/settings';
+import { isAntiDeleteActive } from '../../../plugins/ghost';
 import { getStickerDimensions, REM } from '../../common/helpers/mediaDimensions';
 import renderText from '../../common/helpers/renderText';
 import { getCustomEmojiSize } from '../composer/helpers/customEmoji';
@@ -836,8 +837,11 @@ const Message = ({
     isFocused && !noFocusHighlight && 'focused',
     isForwarding && 'is-forwarding',
     isPlayingDeleteAnimation && 'is-deleting',
-    message.isArchivedDeleted && 'is-archived-deleted',
-    message.isArchivedDeleted && getSettings().shouldGhostBeTransparent && 'is-archived-deleted-transparent',
+    message.isArchivedDeleted && isAntiDeleteActive() && 'is-archived-deleted',
+    message.isArchivedDeleted
+    && isAntiDeleteActive()
+    && getSettings().shouldGhostBeTransparent
+    && 'is-archived-deleted-transparent',
     isPlayingSnapAnimation && 'is-dissolving',
     isInDocumentGroup && 'is-in-document-group',
     isAlbum && 'is-album',

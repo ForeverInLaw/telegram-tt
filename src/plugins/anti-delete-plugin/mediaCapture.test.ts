@@ -161,10 +161,13 @@ function createTestHarness(perBlobCapBytes = 64 * 1024 * 1024) {
       initEventStreams(runtime);
     },
     /** Builds the plugin's `tg` object and runs `setup` — one lifetime. */
-    startPlugin(): { tg: TgPluginApi; dispose: () => void } {
+    async startPlugin(): Promise<{ tg: TgPluginApi; dispose: () => void }> {
       const context = createPluginContext(PLUGIN_NAME, runtime.createPluginReporter(PLUGIN_NAME));
       const tg = buildTgApi(context, runtime);
       const disposer = antiDeletePlugin.setup(tg);
+      // The real app awaits plugin init before any update flows; settle the
+      // async settings load the same way so captures run with real settings
+      await flushAsync();
       return { tg, dispose: () => disposer?.() };
     },
     emitDeletion(messageId: number) {
@@ -261,7 +264,7 @@ afterEach(() => {
 
 describe('anti-delete plugin: media capture', () => {
   it('copies a cached photo blob into plugin storage and enriches the record', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     harness.setFetchFake(() => Promise.resolve([photoBlob()]));
     storePhotoMessage(harness, 501);
     harness.emitDeletion(501);
@@ -280,7 +283,7 @@ describe('anti-delete plugin: media capture', () => {
   });
 
   it('writes the record before the media resolves (the record never waits)', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     const { promise: fetchPromise, resolve: resolveFetch } = Promise.withResolvers<TgMediaBlob[]>();
     harness.setFetchFake(() => fetchPromise);
     storePhotoMessage(harness, 502);
@@ -288,7 +291,7 @@ describe('anti-delete plugin: media capture', () => {
 
     // The media read is still pending, but the record is already readable
     const recordKey = `anti-delete:${buildCaptureKey(TEST_CHAT_ID, 502)}`;
-    await Promise.resolve();
+    await flushAsync();
     expect(harness.recordData.has(recordKey)).toBe(true);
 
     // Only now the blob resolves and the enrichment lands
@@ -301,7 +304,7 @@ describe('anti-delete plugin: media capture', () => {
   });
 
   it('skips the video media read entirely while the prefetch toggle is off', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     storeVideoMessage(harness, 503);
     harness.emitDeletion(503);
     await flushAsync();
@@ -323,7 +326,7 @@ describe('anti-delete plugin: media capture', () => {
   });
 
   it('prefetches and stores the video with the toggle on, passing the flag through', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     updateSettings({ shouldPrefetchVideos: true });
     harness.setFetchFake(() => Promise.resolve([videoBlob()]));
     storeVideoMessage(harness, 504);
@@ -348,7 +351,7 @@ describe('anti-delete plugin: media capture', () => {
   it('degrades to record-only when the blob exceeds the per-blob cap', async () => {
     const cappedHarness = createTestHarness(8);
     cappedHarness.init();
-    const lifetime = cappedHarness.startPlugin();
+    const lifetime = await cappedHarness.startPlugin();
     cappedHarness.setFetchFake(() => Promise.resolve([photoBlob()]));
     storePhotoMessage(cappedHarness, 505);
     cappedHarness.emitDeletion(505);
@@ -365,7 +368,7 @@ describe('anti-delete plugin: media capture', () => {
   });
 
   it('degrades to record-only when nothing is cached (fetch resolves [])', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     harness.setFetchFake(() => Promise.resolve([]));
     storePhotoMessage(harness, 506);
     harness.emitDeletion(506);
@@ -379,7 +382,7 @@ describe('anti-delete plugin: media capture', () => {
   });
 
   it('degrades to record-only when the blob store rejects, and never throws', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     harness.setFetchFake(() => Promise.resolve([photoBlob()]));
     storePhotoMessage(harness, 507);
 
@@ -401,7 +404,7 @@ describe('anti-delete plugin: media capture', () => {
   });
 
   it('clears a chat\'s media blobs together with its records', async () => {
-    const lifetime = harness.startPlugin();
+    const lifetime = await harness.startPlugin();
     harness.setFetchFake(() => Promise.resolve([photoBlob()]));
     storePhotoMessage(harness, 508);
     harness.emitDeletion(508);

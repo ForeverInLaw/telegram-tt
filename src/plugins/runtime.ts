@@ -273,6 +273,14 @@ function showNotification(notification: TgUiNotification) {
  * registration (no removal), so the plugin layer adds exactly one
  * `'apiUpdate'` handler here — alongside the native apiUpdaters — and fans
  * updates out to a set it can subscribe/unsubscribe itself.
+ *
+ * ORDERING INVARIANT: TeactN runs same-action handlers in registration
+ * order, and the app entry imports this module (via `initPlugins`, awaited
+ * in `src/index.tsx`) BEFORE the apiUpdaters register (they register when
+ * `Main` → `global/actions/all` evaluates). So this fan-out runs BEFORE the
+ * native reducers in every `'apiUpdate'` dispatch — the capture model
+ * (`getMessage` still sees the pre-delete/pre-edit message) depends on this
+ * import order. A reorder of these imports silently inverts it.
  */
 const apiUpdateListeners = new Set<(update: ApiUpdate) => void>();
 
