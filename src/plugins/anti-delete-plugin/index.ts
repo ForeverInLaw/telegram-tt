@@ -30,6 +30,11 @@ export default definePlugin({
     const archive = createArchive(tg);
     runtimeArchive = archive;
 
+    // Wire after ticket 05 merges (the Settings → Plugins renderer lands there;
+    // the registry + ui-slice seam already work here, see registerPanel.tsx):
+    //   const unregisterPanel = registerSettingsPanelGlue(tg);
+    // and inside the disposer below:
+    //   unregisterPanel?.();
     const unsubscribe = tg.on('message:deleted', (payload) => {
       captureDeletedMessages(tg, payload);
     });

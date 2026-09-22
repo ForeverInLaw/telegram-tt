@@ -114,6 +114,8 @@ export interface TgStorageEngine {
   putBlob: (key: string, blob: Blob) => Promise<TgBlobPutResult>;
   getBlob: (key: string) => Promise<Blob | undefined>;
   deleteBlob: (key: string) => Promise<void>;
+  /** Removes blobs; pass a `prefix` to keep unrelated plugins' blobs. */
+  clearBlobs: (prefix?: string) => Promise<void>;
 
   getUsage: () => Promise<TgStorageUsage>;
   setBudgetBytes: (bytes: number) => Promise<void>;
@@ -413,6 +415,33 @@ export async function createStorageEngine(services: TgStorageServices): Promise<
     }
   }
 
+  /**
+   * Removes blobs (a `prefix` keeps unrelated plugins' blobs), deletes their
+   * files best-effort and resets the usage accounting accordingly — the index
+   * is the accounting source of truth, so accounting stays exact even when a
+   * file removal fails.
+   */
+  async function clearBlobs(prefix?: string) {
+    const removed = prefix === undefined ? blobIndex : blobIndex.filter((entry) => entry.key.startsWith(prefix));
+    if (removed.length === 0) return;
+
+    blobIndex = blobIndex.filter((entry) => prefix !== undefined && !entry.key.startsWith(prefix));
+    usageBytes = Math.max(0, usageBytes - removed.reduce((sum, entry) => sum + entry.sizeBytes, 0));
+
+    if (blobBackend) {
+      for (const entry of removed) {
+        try {
+          await blobBackend.remove(entry.key);
+        } catch (err) {
+          // A stuck file stays on disk, but the index no longer serves it
+          logError(`failed to clear blob ${entry.key}`, err);
+        }
+      }
+    }
+
+    await Promise.all([persistUsage(), persistIndex()]);
+  }
+
   async function putRecord(key: string, record: unknown) {
     if (!areWritesReady) {
       throw new Error('storage engine writes are unavailable');
@@ -515,6 +544,7 @@ export async function createStorageEngine(services: TgStorageServices): Promise<
     putBlob,
     getBlob,
     deleteBlob,
+    clearBlobs,
     getUsage,
     setBudgetBytes,
     setPerBlobCapBytes,

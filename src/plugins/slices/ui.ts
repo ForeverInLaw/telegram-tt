@@ -2,12 +2,13 @@ import type { PluginContext } from '../context';
 import type { TgPluginRuntime } from '../runtime';
 import type {
   TgChatContextMenuItem, TgComposerButton, TgMainMenuItem, TgMessageContextMenuItem, TgPluginApi,
-  TgUiNotification,
+  TgSettingsPanelRegistration, TgUiNotification,
 } from '../types';
 
 import {
   clearChatContextMenuItems, clearComposerButtons, clearMainMenuItems, clearMessageContextMenuItems,
-  registerChatContextMenuItem, registerComposerButton, registerMainMenuItem, registerMessageContextMenuItem,
+  clearSettingsPanels, registerChatContextMenuItem, registerComposerButton, registerMainMenuItem,
+  registerMessageContextMenuItem, registerSettingsPanel,
 } from '../registry';
 
 /**
@@ -25,6 +26,7 @@ export function createUiSlice(context: PluginContext, runtime: TgPluginRuntime):
     clearChatContextMenuItems(pluginName);
     clearMainMenuItems(pluginName);
     clearComposerButtons(pluginName);
+    clearSettingsPanels(pluginName);
   });
 
   return {
@@ -51,6 +53,12 @@ export function createUiSlice(context: PluginContext, runtime: TgPluginRuntime):
         ...item,
         onClick: wrap(item.onClick),
       });
+    },
+    registerSettingsPanel: (panel: TgSettingsPanelRegistration) => {
+      registerSettingsPanel(pluginName, panel);
+      return () => {
+        clearSettingsPanels(pluginName);
+      };
     },
     showNotification: (notification: TgUiNotification) => {
       // The runtime service can throw (e.g. a malformed payload); contain it like a callback

@@ -1,5 +1,6 @@
 import type {
   TgChatContextMenuItem, TgComposerButton, TgMainMenuItem, TgMessageContextMenuItem,
+  TgSettingsPanelRegistration,
 } from './types';
 
 /**
@@ -50,6 +51,7 @@ const messageContextMenuRegistry = createSurfaceRegistry<TgMessageContextMenuIte
 const chatContextMenuRegistry = createSurfaceRegistry<TgChatContextMenuItem>();
 const mainMenuRegistry = createSurfaceRegistry<TgMainMenuItem>();
 const composerButtonRegistry = createSurfaceRegistry<TgComposerButton>();
+const settingsPanelRegistry = createSurfaceRegistry<TgSettingsPanelRegistration>();
 
 // Kept exported one-by-one so native seams import a named getter per surface.
 
@@ -101,4 +103,17 @@ export function clearComposerButtons(pluginName: string) {
 
 export function getComposerButtons(): readonly TgComposerButton[] {
   return composerButtonRegistry.getAll();
+}
+
+export function registerSettingsPanel(pluginName: string, panel: TgSettingsPanelRegistration) {
+  settingsPanelRegistry.register(pluginName, panel);
+}
+
+export function clearSettingsPanels(pluginName: string) {
+  settingsPanelRegistry.clearByPlugin(pluginName);
+}
+
+/** Returns a stable-reference array; safe to call from render. */
+export function getSettingsPanels(): readonly TgSettingsPanelRegistration[] {
+  return settingsPanelRegistry.getAll();
 }

@@ -96,6 +96,14 @@ tg.ui.showNotification({
   icon: 'star',        // renderer defaults to an info icon
   duration: 3000,      // auto-dismiss in ms; renderer defaults to 3000
 });
+
+// The plugin's own settings section, rendered inside Settings → Plugins.
+// The app renders the returned node with its own settings styling; the
+// panel is removed when the plugin is disabled. See anti-delete-plugin.
+const unregisterPanel = tg.ui.registerSettingsPanel({
+  title: 'MyPluginSettingsTitle',   // an app lang key
+  render: () => buildMyPanelNode(),  // called per render of the settings screen
+});
 ```
 
 Repeated `showNotification` calls stack: every call carries a fresh generated id, so identical message bodies are not deduped by the notification pipeline.
@@ -198,8 +206,14 @@ const result = await tg.storage.putBlob('media:msg5', blob);
 // result: { isStored: true } | { isStored: false, reason: 'overCap' | 'overBudget' | 'unavailable' }
 const blob = await tg.storage.getBlob('media:msg5');                          // undefined when evicted
 await tg.storage.deleteBlob('media:msg5');
+await tg.storage.clearBlobs();                                               // clears ONLY this plugin's blobs
 
 const usage = await tg.storage.getUsage();  // { usedBytes, budgetBytes, quotaBytes }
+
+// Engine-wide config, reached through the slice (the settings UI of the plugin
+// that owns the budget/cap semantics calls these):
+await tg.storage.setBudgetBytes(12 * 1024 ** 3);      // the engine clamps to 50% of the quota
+await tg.storage.setPerBlobCapBytes(256 * 1024 ** 2);
 ```
 
 Guarantees to design against:
@@ -212,7 +226,7 @@ Guarantees to design against:
 - **Error containment.** Every method logs failures with the plugin name and resolves a safe result — a missing engine answers reads with `undefined`/empty pages and writes with `{ isStored: false, reason: 'unavailable' }`.
 - **Data outlives enable/disable.** Disabling a plugin never drops its storage; re-enabling sees the same data. Only the explicit `delete*`/`clear*` methods remove it.
 
-Budget and per-blob cap settings live on the engine, not the slice (they are engine-wide): the settings UI reaches them through the runtime's engine handle (`getStorageEngineHandle` in `src/plugins/runtime.ts` — `setBudgetBytes` / `setPerBlobCapBytes` / `getUsage`). Plugins read usage via `tg.storage.getUsage()`.
+Budget and per-blob cap settings live on the engine, not the plugin's record space (they are engine-wide). The settings UI of the plugin that owns their semantics reaches them through the slice: `tg.storage.setBudgetBytes` / `tg.storage.setPerBlobCapBytes` delegate to the runtime's engine handle and `tg.storage.getUsage()` reports the engine's accounting. The engine clamps the effective budget to 50% of the origin quota at runtime, so a settings panel additionally persists its user's chosen value in its own records (the anti-delete panel does, so the slider position survives reloads).
 
 ## Contract policy
 
