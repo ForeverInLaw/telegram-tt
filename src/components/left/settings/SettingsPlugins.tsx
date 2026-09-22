@@ -73,7 +73,10 @@ const SettingsPlugins = ({ isActive, onReset }: OwnProps) => {
       {settingsPanels.length > 0 && (
         <Island>
           {settingsPanels.map((panel, index) => (
-            <div key={`plugin-settings-panel-${index}`}>{panel.render()}</div>
+            <div key={`plugin-settings-panel-${index}`}>
+              <h4 className="settings-item-description mb-2" dir="auto">{lang(panel.title)}</h4>
+              {panel.render()}
+            </div>
           ))}
         </Island>
       )}
