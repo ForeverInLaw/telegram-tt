@@ -439,6 +439,10 @@ export type ApiUpdateDeleteMessages = {
   '@type': 'deleteMessages';
   ids: number[];
   chatId?: string;
+  /** Locally-initiated deletion (this client's own delete action); server updates leave it unset. */
+  isLocal?: boolean;
+  /** Deletion origin; unset server updates classify as a plain delete. */
+  source?: 'delete' | 'historyClear' | 'ttl';
 };
 
 export type ApiUpdateDeleteScheduledMessages = {

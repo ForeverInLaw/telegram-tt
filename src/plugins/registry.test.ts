@@ -1,17 +1,21 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { TgMessageContextMenuItem } from './types';
 
 import {
   clearChatContextMenuItems, clearComposerButtons, clearMainMenuItems, clearMessageContextMenuItems,
+  clearSettingsPanels, closeActivePluginScreen, closePluginScreen, getActivePluginScreen,
   getChatContextMenuItems, getComposerButtons, getMainMenuItems, getMessageContextMenuItems,
-  registerChatContextMenuItem, registerComposerButton, registerMainMenuItem, registerMessageContextMenuItem,
+  getSettingsPanels, openPluginScreen, registerChatContextMenuItem,
+  registerComposerButton, registerMainMenuItem, registerMessageContextMenuItem, registerSettingsPanel,
+  subscribeToPluginScreen, subscribeToSettingsPanels,
 } from './registry';
 
 /** Registries are module-level state; tests clean up their own plugin names. */
 const PLUGIN_NAMES = [
   'registry-order-a', 'registry-order-b', 'registry-stable-a', 'registry-stable-b',
   'registry-clear-a', 'registry-clear-b', 'registry-clear-unknown', 'registry-single-surface',
+  'registry-screen-a', 'registry-screen-b', 'registry-panels-a', 'registry-panels-b',
 ];
 
 function clearAllPluginNames() {
@@ -20,11 +24,20 @@ function clearAllPluginNames() {
     clearChatContextMenuItems(pluginName);
     clearMainMenuItems(pluginName);
     clearComposerButtons(pluginName);
+    clearSettingsPanels(pluginName);
+    closePluginScreen(pluginName);
   }
 }
 
 function createItem(label: string): TgMessageContextMenuItem {
   return { label, onClick: () => {} };
+}
+
+/** Builds a minimal screen descriptor with spies for the screen lifecycle. */
+function createTestScreen(title: string) {
+  const render = vi.fn(() => undefined);
+  const onClose = vi.fn();
+  return { screen: { title, render, onClose }, render, onClose };
 }
 
 describe('surface registries', () => {
@@ -100,5 +113,114 @@ describe('surface registries', () => {
 
     expect(getMessageContextMenuItems().some((item) => item.label === 'Single message item')).toBe(false);
     expect(getMainMenuItems().some((item) => item.label === 'Single main item')).toBe(true);
+  });
+});
+
+describe('active plugin screen', () => {
+  afterEach(() => {
+    clearAllPluginNames();
+    expect(getActivePluginScreen()).toBeUndefined();
+    expect(getSettingsPanels()).toHaveLength(0);
+  });
+
+  it('opens a screen under its plugin and closes it through closePluginScreen', () => {
+    const { screen, render, onClose } = createTestScreen('Registry screen');
+
+    openPluginScreen('registry-screen-a', screen);
+
+    const active = getActivePluginScreen();
+    expect(active?.pluginName).toBe('registry-screen-a');
+    expect(active?.screen.title).toBe('Registry screen');
+
+    // The registry stores the descriptor as given (the ui slice wraps the factory)
+    expect(active?.screen.render).toBe(render);
+    expect(render).not.toHaveBeenCalled();
+
+    closePluginScreen('registry-screen-a');
+
+    expect(getActivePluginScreen()).toBeUndefined();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces the open screen, firing the previous screen onClose', () => {
+    const first = createTestScreen('First');
+    const second = createTestScreen('Second');
+
+    openPluginScreen('registry-screen-a', first.screen);
+    openPluginScreen('registry-screen-b', second.screen);
+
+    expect(getActivePluginScreen()?.screen.title).toBe('Second');
+    expect(first.onClose).toHaveBeenCalledTimes(1);
+    expect(second.onClose).not.toHaveBeenCalled();
+
+    // Closing by a different plugin name leaves the open screen alone
+    closePluginScreen('registry-screen-a');
+    expect(getActivePluginScreen()?.screen.title).toBe('Second');
+    expect(second.onClose).not.toHaveBeenCalled();
+
+    closeActivePluginScreen();
+    expect(getActivePluginScreen()).toBeUndefined();
+    expect(second.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies subscribers on open and close', () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToPluginScreen(listener);
+    const { screen } = createTestScreen('Subscribed');
+
+    openPluginScreen('registry-screen-a', screen);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    listener.mockClear();
+    closePluginScreen('registry-screen-a');
+
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    listener.mockClear();
+    unsubscribe();
+    // No-op close: no notification
+    closePluginScreen('registry-screen-a');
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe('settings panels', () => {
+  afterEach(() => {
+    clearAllPluginNames();
+    expect(getSettingsPanels()).toHaveLength(0);
+  });
+
+  it('lists registered panels in order and clears them per plugin', () => {
+    const renderA = vi.fn(() => undefined);
+    const renderB = vi.fn(() => undefined);
+
+    registerSettingsPanel('registry-panels-a', { render: renderA });
+    registerSettingsPanel('registry-panels-b', { render: renderB });
+
+    expect(getSettingsPanels().map((panel) => panel.render)).toEqual([renderA, renderB]);
+
+    clearSettingsPanels('registry-panels-a');
+
+    expect(getSettingsPanels().map((panel) => panel.render)).toEqual([renderB]);
+  });
+
+  it('notifies subscribers on register and clear', () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToSettingsPanels(listener);
+
+    registerSettingsPanel('registry-panels-a', { render: () => undefined });
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    listener.mockClear();
+    clearSettingsPanels('registry-panels-a');
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    listener.mockClear();
+    // Clearing a plugin without panels keeps the stable reference: no notification
+    clearSettingsPanels('registry-panels-b');
+    expect(listener).not.toHaveBeenCalled();
+
+    unsubscribe();
   });
 });

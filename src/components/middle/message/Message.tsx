@@ -139,6 +139,8 @@ import { parseTranslationCacheKey } from '../../../util/keys/translationKey';
 import { getServerTime } from '../../../util/serverTime';
 import stopEvent from '../../../util/stopEvent';
 import { isElementInViewport } from '../../../util/visibility/isElementInViewport';
+import { getSettings } from '../../../plugins/anti-delete-plugin/settings';
+import { isAntiDeleteActive } from '../../../plugins/ghost';
 import { getStickerDimensions, REM } from '../../common/helpers/mediaDimensions';
 import renderText from '../../common/helpers/renderText';
 import { getCustomEmojiSize } from '../composer/helpers/customEmoji';
@@ -835,6 +837,11 @@ const Message = ({
     isFocused && !noFocusHighlight && 'focused',
     isForwarding && 'is-forwarding',
     isPlayingDeleteAnimation && 'is-deleting',
+    message.isArchivedDeleted && isAntiDeleteActive() && 'is-archived-deleted',
+    message.isArchivedDeleted
+    && isAntiDeleteActive()
+    && getSettings().shouldGhostBeTransparent
+    && 'is-archived-deleted-transparent',
     isPlayingSnapAnimation && 'is-dissolving',
     isInDocumentGroup && 'is-in-document-group',
     isAlbum && 'is-album',

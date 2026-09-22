@@ -452,6 +452,31 @@ export interface LangPair {
   'SettingsPlugins': undefined;
   'SettingsPluginsDesc': undefined;
   'SettingsPluginsAbout': undefined;
+  'DeletedMessages': undefined;
+  'DeletedMessagesSearchPlaceholder': undefined;
+  'DeletedMessagesEmpty': undefined;
+  'DeletedMessagesEmptySearch': undefined;
+  'DeletedMessagesClear': undefined;
+  'DeletedMessagesClearConfirm': undefined;
+  'DeletedMessagesDeletedMark': undefined;
+  'DeletedMessagesSourceDelete': undefined;
+  'DeletedMessagesSourceHistoryClear': undefined;
+  'DeletedMessagesSourceTtl': undefined;
+  'DeletedMessagesUnknownSender': undefined;
+  'DeletedMessagesLoadMore': undefined;
+  'DeletedMessagesLoading': undefined;
+  'DeletedMessagesCopied': undefined;
+  'DeletedMessagesMediaPlaceholder': undefined;
+  'DeletedMessagesEditHistory': undefined;
+  'DeletedMessagesEditHistoryEmpty': undefined;
+  'DeletedMessagesEditHistoryRevision': undefined;
+  'DeletedMessagesMediaPhoto': undefined;
+  'DeletedMessagesMediaGif': undefined;
+  'DeletedMessagesMediaSticker': undefined;
+  'DeletedMessagesMediaDocument': undefined;
+  'DeletedMessagesMediaVideo': undefined;
+  'DeletedMessagesMediaAudio': undefined;
+  'DeletedMessagesMediaVoice': undefined;
   'PrivacyPhone': undefined;
   'PrivacyLastSeen': undefined;
   'PrivacyProfilePhoto': undefined;
@@ -814,6 +839,7 @@ export interface LangPair {
   'MessageMetaEdited': undefined;
   'MessageMetaApproximate': undefined;
   'MessageMetaImported': undefined;
+  'MessageArchivedDeleted': undefined;
   'ImportedInfo': undefined;
   'ScheduledMessagesEmptyPlaceholder': undefined;
   'ConversationCloudStorageInfoTitle': undefined;
@@ -2365,6 +2391,17 @@ export interface LangPair {
   'SettingsPerformanceDesc': undefined;
   'SettingsStickersDesc': undefined;
   'SettingsSessionsDesc': undefined;
+  'AntiDeleteSettingsTitle': undefined;
+  'AntiDeleteSettingsCaptureBots': undefined;
+  'AntiDeleteSettingsGhostTransparency': undefined;
+  'AntiDeleteSettingsPrefetchVideos': undefined;
+  'AntiDeleteSettingsMediaBudget': undefined;
+  'AntiDeleteSettingsPerBlobCap': undefined;
+  'AntiDeleteSettingsUsage': undefined;
+  'AntiDeleteSettingsQuota': undefined;
+  'AntiDeleteSettingsClearAll': undefined;
+  'AntiDeleteSettingsClearAllConfirm': undefined;
+  'AntiDeleteSettingsClearAllDescription': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -2510,6 +2547,9 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'AutodownloadSizeLimitUpTo': {
     'limit': V;
+  };
+  'DeletedMessagesEditHistoryCount': {
+    'count': V;
   };
   'AutoDeleteSetInfo': {
     'time': V;

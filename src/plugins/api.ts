@@ -4,6 +4,7 @@ import type { TgPluginApi } from './types';
 
 import { createApiSlice } from './slices/api';
 import { createEventsSlice } from './slices/events';
+import { createStorageSlice } from './slices/storage';
 import { createStoreSlice } from './slices/store';
 import { createUiSlice } from './slices/ui';
 import { createUtilSlice } from './slices/util';
@@ -20,5 +21,6 @@ export function buildTgApi(context: PluginContext, runtime: TgPluginRuntime): Tg
     api: createApiSlice(context, runtime),
     store: createStoreSlice(context, runtime),
     util: createUtilSlice(context, runtime),
+    storage: createStorageSlice(context, runtime),
   };
 }

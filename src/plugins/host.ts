@@ -46,8 +46,13 @@ let activeRuntime: TgPluginRuntime | undefined;
 // eslint-disable-next-line no-console
 const log = (...args: unknown[]) => console.log(LOG_PREFIX, LOG_STYLE, ...args);
 
-/** Loads every discovered plugin module; called once at app startup. */
-export function initPlugins(runtime: TgPluginRuntime) {
+/**
+ * Loads every discovered plugin module; called once at app startup. Awaits
+ * the storage engine's readiness, so the app entry can await plugin init
+ * before the first plugin write (the engine's IndexedDB open and quota
+ * estimate are the only potentially slow parts).
+ */
+export async function initPlugins(runtime: TgPluginRuntime) {
   activeRuntime = runtime;
   // Re-init tears every enabled plugin's previous lifetime down exactly like
   // `disablePlugin` does, so re-running `setup` below cannot stack menu items,
@@ -65,6 +70,12 @@ export function initPlugins(runtime: TgPluginRuntime) {
   for (const [path, pluginModule] of Object.entries(modules)) {
     loadPluginModule(pluginModule?.default, path, runtime);
   }
+
+  // A broken engine must not block boot: `getStorageEngine()` rejects for
+  // every plugin and the storage slice answers with safe defaults.
+  await runtime.getStorageEngine().catch((error) => {
+    runtime.createPluginReporter('host').logError('storage engine init', error);
+  });
 }
 
 /**
@@ -87,7 +98,7 @@ export function loadPluginModule(pluginExport: unknown, path: string, runtime: T
   const reporter = runtime.createPluginReporter(plugin.name);
   loadedPlugins.set(plugin.name, plugin);
 
-  if (!runtime.isPluginEnabled(plugin.name)) {
+  if (!runtime.isPluginEnabled(plugin.name, plugin.isEnabledByDefault ?? true)) {
     reporter.log('is disabled, setup skipped');
     rebuildPluginList();
     return;

@@ -779,6 +779,8 @@ export interface ApiMessage {
   suggestedPostInfo?: ApiInputSuggestedPostInfo;
   sendingState?: 'messageSendingStatePending' | 'messageSendingStateFailed';
   forwardInfo?: ApiMessageForwardInfo;
+  /** Retained ghost (anti-delete capability): set instead of `isDeleting` so the message stays in the store. */
+  isArchivedDeleted?: boolean;
   isDeleting?: boolean;
   previousLocalId?: number;
   viewsCount?: number;

@@ -42,7 +42,23 @@ function createTestUtilSlice() {
     getChat: () => {
       throw new Error('the util slice never reads the store');
     },
+    getUser: () => {
+      throw new Error('the util slice never reads the store');
+    },
+    getCommonBoxChatId: () => {
+      throw new Error('the util slice never reads the store');
+    },
+    getMessage: () => {
+      throw new Error('the util slice never reads the store');
+    },
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key, variables) => `translated:${key}:${JSON.stringify(variables ?? {})}`,
+    getStorageEngine: () => {
+      throw new Error('the util slice never touches storage');
+    },
+    getStorageEngineHandle: () => {
+      throw new Error('the util slice never touches storage');
+    },
     showNotification: () => {
       throw new Error('the util slice never shows notifications');
     },

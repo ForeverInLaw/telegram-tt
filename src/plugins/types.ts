@@ -1,7 +1,26 @@
-import type { ApiChat, ApiMessage } from '../api/types';
+import type { TeactNode } from '../lib/teact/teact';
+
+import type { ApiChat, ApiMessage, ApiUser } from '../api/types';
 import type { ThreadId } from '../types';
 import type { IconName } from '../types/icons';
-import type { LangKey, LangVariable } from '../types/language';
+import type { LangKey, LangVariable, RegularLangKey } from '../types/language';
+
+/** A node factory plugins pass to `tg.ui` render surfaces; re-exported here so plugin code stays within the import policy. */
+export type TgTeactNode = TeactNode;
+
+/**
+ * A full screen a plugin opens through `tg.ui.openScreen`. The app renders the
+ * node produced by `render` inside its own overlay container with a header
+ * (title, back button); the plugin never touches UI primitives.
+ */
+export interface TgPluginScreen {
+  /** Header title; a plain string, already localized by the plugin. */
+  title: string;
+  /** Node factory the container calls to render the screen body; a fresh node per render. */
+  render: () => TgTeactNode;
+  /** Called when the screen closes (back button, container unmount, plugin disable). */
+  onClose?: () => void;
+}
 
 /**
  * Declarative descriptor for a context-menu item contributed by a plugin.
@@ -36,6 +55,19 @@ export interface TgPluginApi {
     addComposerButton: (item: TgComposerButton) => void;
     /** Show an in-app notification with title and body. */
     showNotification: (notification: TgUiNotification) => void;
+    /**
+     * Opens the plugin's full screen in the app's own overlay container
+     * (header with the title, back navigation). Returns a close function;
+     * closing also fires the screen's `onClose`. Opening another screen
+     * replaces the current one; disabling the plugin closes its open screen.
+     */
+    openScreen: (screen: TgPluginScreen) => () => void;
+    /**
+     * Registers the plugin's settings panel, rendered inside Settings →
+     * Plugins under the plugin's own list entry. Returns the unregister
+     * function; the host also removes the panel when the plugin is disabled.
+     */
+    registerSettingsPanel: (panel: TgSettingsPanelRegistration) => () => void;
   };
   /**
    * Subscribe to an app event and receive its typed payload; returns the
@@ -52,6 +84,12 @@ export interface TgPluginApi {
   store: TgStoreSlice;
   /** Per-plugin logging and the app's localized strings. */
   util: TgUtilSlice;
+  /**
+   * Per-plugin persistent storage with a quota-aware budget: JSON records in
+   * IndexedDB, binary blobs in OPFS, each scoped per plugin and per account
+   * — one plugin cannot read another's data, and accounts never mix.
+   */
+  storage: TgStorageSlice;
 }
 
 export interface TgPlugin {
@@ -60,6 +98,11 @@ export interface TgPlugin {
   version?: string;
   /** Short summary shown under the plugin name in Settings. */
   description?: string;
+  /**
+   * Enabled state until the user toggles the plugin in Settings; `true` when
+   * omitted. The bundled demo plugins declare `false` to stay off by default.
+   */
+  isEnabledByDefault?: boolean;
   /** Called at app startup and on every re-enable with a fresh `tg` object. */
   setup: (tg: TgPluginApi) => void | (() => void);
 }
@@ -115,6 +158,18 @@ export interface TgUiNotification {
   duration?: number;
 }
 
+/**
+ * Declarative descriptor for a plugin's settings panel. The app renders the
+ * returned node with its own Settings primitives and styling inside
+ * Settings → Plugins; the panel is removed when the plugin is disabled.
+ */
+export interface TgSettingsPanelRegistration {
+  /** Panel section heading, an app lang key without variables. */
+  title: RegularLangKey;
+  /** Renders the panel's Teact node; called per render of the settings screen. */
+  render: () => TeactNode;
+}
+
 /** Names of the app events a plugin can observe through `tg.on`. */
 export type TgEventName = 'message:new' | 'message:edited' | 'message:deleted' | 'chat:opened';
 
@@ -136,10 +191,33 @@ export interface TgMessageEditedPayload {
   message: Partial<ApiMessage>;
 }
 
-/** Payload of `message:deleted`: `chatId` is unknown for some chats in the source update. */
-export interface TgMessageDeletedPayload {
+/**
+ * Why the deletion happened. `'delete'` covers plain, batch and admin-purge
+ * deletions; `'historyClear'` is a full chat clear; `'ttl'` is a self-destruct
+ * timer or ephemeral expiry.
+ */
+export type TgDeletionSource = 'delete' | 'historyClear' | 'ttl';
+
+/** One deleted message with the chat the app resolved it to. */
+export interface TgDeletedMessageItem {
+  /** Chat the message belonged to; `undefined` when the store no longer knows it. */
   chatId: string | undefined;
-  messageIds: number[];
+  /** The deleted message's id. */
+  messageId: number;
+  /** `true` when this client's own action initiated the deletion; server-driven deletions are `false`. */
+  isLocal: boolean;
+}
+
+/**
+ * Payload of `message:deleted`: the deletion's source plus one resolved item
+ * per deleted message. The app resolves common-box chat ids and marks
+ * locally-initiated deletions itself, so handlers never guess or read the
+ * store mid-handler. Scheduled-message cancellation is not a deletion and
+ * never fires this event.
+ */
+export interface TgMessageDeletedPayload {
+  source: TgDeletionSource;
+  items: TgDeletedMessageItem[];
 }
 
 /** Payload of `chat:opened`: the active chat changed; `undefined` means the chat closed. */
@@ -165,6 +243,30 @@ export interface TgSendMessageOptions {
 export interface TgDeleteMessagesOptions {
   /** Pass `true` to delete for everyone where the sender's rights allow it. */
   shouldDeleteForAll?: boolean;
+}
+
+/**
+ * One media blob read out of the app's media cache (or freshly downloaded,
+ * for prefetchable kinds). `kind` mirrors the message's media field, so the
+ * caller can pick a rendering strategy without re-inspecting the message.
+ */
+export interface TgMediaBlob {
+  kind: 'photo' | 'gif' | 'sticker' | 'document' | 'video' | 'audio' | 'voice';
+  mimeType: string | undefined;
+  fileName: string | undefined;
+  /** Blob size in bytes; the caller applies its own per-blob cap. */
+  sizeBytes: number;
+  blob: Blob;
+}
+
+/** Options for `tg.api.fetchMessageMedia`. */
+export interface TgFetchMessageMediaOptions {
+  /**
+   * Pass `true` to also fetch a video's bytes while its file reference is
+   * still alive (a real download, not a cache read). Without it, video media
+   * resolves to an empty list unless the bytes are already cached.
+   */
+  shouldPrefetchVideo?: boolean;
 }
 
 /**
@@ -197,6 +299,20 @@ export interface TgApiSlice {
   setReaction: (chatId: string, messageId: number, emoticon: string) => void;
   /** Opens a chat, replacing the currently open message list. */
   openChat: (chatId: string) => void;
+  /**
+   * Reads the message's media blobs out of the app's media cache. Call it
+   * synchronously inside a `message:deleted` handler: the native delete
+   * pipeline unloads the message's cached media a frame later, so the
+   * returned promise must start while the data is still alive. Video bytes
+   * download for real while the file reference lives, and only with
+   * `shouldPrefetchVideo`. Resolves `[]` when nothing is cached (or on any
+   * error — the call is contained, never throws).
+   */
+  fetchMessageMedia: (
+    chatId: string,
+    messageId: number,
+    options?: TgFetchMessageMediaOptions,
+  ) => Promise<TgMediaBlob[]>;
 }
 
 /**
@@ -210,6 +326,16 @@ export interface TgStoreSlice {
   getCurrentUserId: () => string | undefined;
   /** Chat (or private user) data by id, as a read-only view of the stored object. */
   getChat: (chatId: string) => Readonly<ApiChat> | undefined;
+  /**
+   * User data by id (the `ApiUser` record behind a private chat's peer) —
+   * a read-only view; `undefined` when the store knows no such user.
+   */
+  getUser: (userId: string) => Readonly<ApiUser> | undefined;
+  /**
+   * Message data by chat and id, as a read-only view of the stored object;
+   * `undefined` once the message is gone from the store.
+   */
+  getMessage: (chatId: string, messageId: number) => Readonly<ApiMessage> | undefined;
 }
 
 /** Utility slice: namespaced logging and the app's localized strings. */
@@ -225,4 +351,103 @@ export interface TgUtilSlice {
    * fails.
    */
   getLocalizedString: (key: LangKey, variables?: Record<string, LangVariable>) => string;
+}
+
+// --- tg.storage ----------------------------------------------------------------
+//
+// A budgeted storage engine exposed to every plugin as a contract slice (see
+// src/plugins/storageEngine.ts). Keys are namespaced per calling plugin and
+// scoped per account slot, so plugins and accounts never see each other's
+// data. Records are small JSON values kept in IndexedDB and are never evicted;
+// blobs are binary values kept in OPFS under a shared budget — writing past
+// the budget evicts the oldest captured blobs first.
+
+/** Result of `tg.storage.putBlob`. */
+export interface TgBlobPutResult {
+  /** Whether the blob bytes were written; `false` means the record must carry the truth. */
+  isStored: boolean;
+  /** Present when `isStored` is `false`; names the failure mode. */
+  reason?: 'overCap' | 'overBudget' | 'unavailable';
+}
+
+/** Storage footprint of the blob space, as reported by `tg.storage.getUsage`. */
+export interface TgStorageUsage {
+  /** Bytes used by stored blobs, tracked incrementally (startup estimate + deltas). */
+  usedBytes: number;
+  /** Effective blob budget: `min(budget setting, 50% of the storage quota)`. */
+  budgetBytes: number;
+  /** The origin storage quota reported by `navigator.storage.estimate()`. */
+  quotaBytes: number;
+}
+
+/** Options for `tg.storage.listRecords`. */
+export interface TgListRecordsOptions {
+  /** Restrict the listing to keys starting with this prefix. */
+  prefix?: string;
+  /** Page size; the engine caps the request at its own maximum. */
+  limit?: number;
+  /** Opaque resume point returned by a previous page's `cursor`. */
+  cursor?: string;
+}
+
+/** One page of `tg.storage.listRecords`. */
+export interface TgListRecordsPage<T> {
+  items: Array<{ key: string; record: T }>;
+  /** Pass to the next call to continue after the last item; `undefined` ends the listing. */
+  cursor?: string;
+}
+
+/**
+ * Persistent storage scoped per plugin and per account. Every method is
+ * error-contained: a failing call logs with the plugin name and resolves to
+ * a safe result, never throws. Storage outlives enable/disable — data is
+ * cleared only through the explicit remove/clear methods.
+ */
+export interface TgStorageSlice {
+  /** Persists a small JSON record; records are unbudgeted and never evicted. */
+  putRecord: (key: string, record: unknown) => Promise<void>;
+  /** Reads one record; `undefined` when missing or unparsable. */
+  getRecord: <T>(key: string) => Promise<T | undefined>;
+  /**
+   * Lists records by key, ascending. `cursor` pages through the plugin's
+   * whole record space; a `prefix` narrows the walk (e.g. `'chat:100:'`
+   * lists one chat's archive), and `limit` bounds the page size.
+   */
+  listRecords: <T>(options?: TgListRecordsOptions) => Promise<TgListRecordsPage<T>>;
+  /** Removes one record; a missing key resolves without error. */
+  deleteRecord: (key: string) => Promise<void>;
+  /** Removes every record of the calling plugin; blobs are untouched. */
+  clearRecords: () => Promise<void>;
+
+  /**
+   * Persists blob bytes under `key`; a record-only archive is indicated by
+   * the result, never by a throw. Blobs over the per-blob cap resolve
+   * `{ isStored: false, reason: 'overCap' }`; an exhausted budget resolves
+   * `reason: 'overBudget'` after eviction could not make room; a missing
+   * OPFS backend resolves `reason: 'unavailable'`.
+   */
+  putBlob: (key: string, blob: Blob) => Promise<TgBlobPutResult>;
+  /** Reads blob bytes; `undefined` when missing (e.g. evicted) or unavailable. */
+  getBlob: (key: string) => Promise<Blob | undefined>;
+  /** Removes one blob; a missing key resolves without error. */
+  deleteBlob: (key: string) => Promise<void>;
+  /**
+   * Removes every blob of the calling plugin (its OPFS directory) and resets
+   * the shared usage accounting accordingly; records are untouched.
+   */
+  clearBlobs: () => Promise<void>;
+  /** Footprint of the blob space: used, budget and quota bytes. */
+  getUsage: () => Promise<TgStorageUsage>;
+  /**
+   * Sets the engine-wide media budget in bytes; the engine clamps the
+   * effective budget to 50% of the origin quota. Intended for the settings
+   * UI of the plugin that owns the budget's semantics.
+   */
+  setBudgetBytes: (bytes: number) => Promise<void>;
+  /**
+   * Sets the engine-wide cap on one blob in bytes; larger media stays
+   * record-only. Intended for the settings UI of the plugin that owns the
+   * cap's semantics.
+   */
+  setPerBlobCapBytes: (bytes: number) => Promise<void>;
 }

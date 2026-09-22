@@ -9,6 +9,8 @@ export default definePlugin({
   name: 'ui-demo-plugin',
   version: '0.1.0',
   description: 'Adds demo items to the chat context menu, main menu and composer bar.',
+  // Demo plugin: off until the user enables it in Settings → Plugins
+  isEnabledByDefault: false,
   setup(tg) {
     tg.ui.addChatContextMenuItem({
       icon: 'lamp',

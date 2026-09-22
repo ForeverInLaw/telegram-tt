@@ -9,6 +9,8 @@ export default definePlugin({
   name: 'hello-plugin',
   version: '0.2.0',
   description: 'Runnable showcase of the plugin contract — see src/plugins/README.md.',
+  // Demo plugin: off until the user enables it in Settings → Plugins
+  isEnabledByDefault: false,
   setup(tg) {
     // Store reads happen outside event handlers; handlers trust their payload
     const currentUserId = tg.store.getCurrentUserId();

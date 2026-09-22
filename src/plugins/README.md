@@ -9,6 +9,7 @@ The types in [`types.ts`](./types.ts) are the contract — this document explain
 | [`hello-plugin`](./hello-plugin/index.ts) | The showcase — one minimal use of every surface (this README's examples point into it) |
 | [`echo-plugin`](./echo-plugin/index.ts) | `tg.api` + `tg.store` + `tg.util` combined in one action |
 | [`ui-demo-plugin`](./ui-demo-plugin/index.ts) | Every `tg.ui` surface with a notification response |
+| [`anti-delete-plugin`](./anti-delete-plugin/index.ts) | A full feature plugin — deletion archival with settings, a read API and persistence |
 
 A plugin module never imports from `src/global` or `src/api` — only the reverse direction (app code importing from `src/plugins`) is legal, enforced by convention. Everything a plugin may call arrives in `setup(tg)`; types and helpers come from [`types.ts`](./types.ts) only.
 
@@ -32,6 +33,7 @@ export default definePlugin({
 
 - `name` (required) — the unique registry key. The host skips a module whose name is already registered, and the enable/disable persistence keys off the name, so keep it stable.
 - `version?`, `description?` — plain data shown on the Settings → Plugins screen.
+- `isEnabledByDefault?` — enabled state until the user first toggles the plugin; `true` when omitted. The bundled demo plugins declare `false`, so they stay off until enabled in Settings → Plugins.
 - `setup` (required) — receives the `tg` object; described next.
 
 There is no registration step. The host ([`host.ts`](./host.ts)) globs `src/plugins/*/index.ts` and loads every valid default export at app startup, before the app boots. The dev bundler hot-reloads a changed plugin module. A module without a valid `TgPlugin` default export (or with a duplicate name) is logged and skipped — it never breaks the client.
@@ -52,7 +54,7 @@ setup(tg) {
 
 - **Disposer.** Called when the plugin is disabled. Anything the plugin did not clean up itself — menu items, composer buttons, event subscriptions — is removed by the host right after the disposer, so a missing disposer body cannot leak contributions.
 - **Enable/disable.** The Settings → Plugins screen lists every discovered plugin with a toggle. Toggling applies immediately, without a page reload: disabling runs the disposer and clears the plugin's registry entries and subscriptions; enabling re-runs `setup` with a fresh `tg` object and restores its contributions.
-- **Persistence.** The enabled/disabled choice is stored in localStorage, keyed by plugin name (globally, not per account), and read at startup: a disabled plugin is registered (listed in Settings) but its `setup` is never run until it is enabled.
+- **Persistence.** The enabled/disabled choice is stored in localStorage, keyed by plugin name (globally, not per account), and read at startup: a plugin without a stored choice starts from its `isEnabledByDefault` flag (`true` when omitted), and a disabled plugin is registered (listed in Settings) but its `setup` is never run until it is enabled.
 - **Error isolation.** Errors in `setup`, in any handler (`onClick`, event handlers), and in `tg.api` / `tg.store` / `tg.util` calls are caught and logged to the console with the plugin name. A throwing plugin never crashes the client, other plugins keep working, and a half-registered plugin (setup that throws midway) leaves no partial contributions behind. The Settings → Plugins toggle reflects that runtime state: a failed setup shows as off even though the stored choice stays on, and toggling the plugin on again retries `setup`.
 
 ## `tg.ui`
@@ -94,9 +96,36 @@ tg.ui.showNotification({
   icon: 'star',        // renderer defaults to an info icon
   duration: 3000,      // auto-dismiss in ms; renderer defaults to 3000
 });
+
+// Full screen with the app's own container: header with the title and a back
+// button, the node produced by `render` below it. Returns a close function.
+// See anti-delete-plugin.
+const closeScreen = tg.ui.openScreen({
+  title: 'My screen',                    // header title; localize it yourself
+  render: () => myScreenNode,           // node factory; a fresh node per render
+  // onClose: () => {},                  // optional; fires on every close
+});
+
+closeScreen();                          // closes the screen (fires `onClose`)
+
+// The plugin's own settings section, rendered inside Settings → Plugins.
+// The app renders the returned node with its own settings styling; the
+// panel is removed when the plugin is disabled. See anti-delete-plugin.
+const unregisterPanel = tg.ui.registerSettingsPanel({
+  title: 'MyPluginSettingsTitle',   // an app lang key
+  render: () => buildMyPanelNode(),  // called per render of the settings screen
+});
 ```
 
 Repeated `showNotification` calls stack: every call carries a fresh generated id, so identical message bodies are not deduped by the notification pipeline.
+
+`openScreen` details to design against:
+
+- **One screen at a time.** Opening a screen replaces the currently open one (firing its `onClose` first); the app renders at most one plugin screen.
+- **The close function is keyed by plugin.** It closes the plugin's currently open screen only; when the screen was replaced by another plugin's `openScreen` or already closed, calling it is a no-op. Re-opening from the same plugin replaces its own screen (firing the old `onClose`).
+- **`render` is a factory.** The container calls it on every render pass, so return a fresh node, never a stored one.
+- **`onClose` fires on every close.** Back button, ESC, the returned close function, history back navigation and plugin disable all fire it.
+- **Disabling the plugin closes its open screen** and clears its settings panel, like every other contribution.
 
 ## `tg.on`
 
@@ -110,8 +139,16 @@ const offEdited = tg.on('message:edited', ({ chatId, messageId, message }) => {
   // also a reaction change, a poll vote, a web-page preview, fresh media.
   // `message` carries only the updated fields, so treat it as partial
 });
-const offDeleted = tg.on('message:deleted', ({ chatId, messageIds }) => {
-  // `chatId` is undefined in some source updates — always check before use
+const offDeleted = tg.on('message:deleted', ({ source, items }) => {
+  // `source` tells you why the messages went:
+  //   'delete'       — plain, batch or admin-purge deletions (the default)
+  //   'historyClear' — the whole chat was cleared
+  //   'ttl'          — a self-destruct timer or ephemeral expiry fired
+  // `items` carries one resolved entry per deleted message: `chatId` (the
+  // app resolves common-box deletions itself — check for `undefined` only
+  // for messages the store no longer knows), `messageId`, and `isLocal`
+  // (`true` when this client's own action initiated the deletion).
+  // Scheduled-message cancellation is not a deletion and never fires here.
 });
 const offOpened = tg.on('chat:opened', ({ chatId }) => {
   // `chatId === undefined` means the chat closed
@@ -139,11 +176,17 @@ tg.api.deleteMessages(chatId, [messageId1, messageId2]);     // always addresses
 tg.api.deleteMessages(chatId, [messageId], { shouldDeleteForAll: true });
 tg.api.setReaction(chatId, messageId, '👍');
 tg.api.openChat(chatId);
+
+// Media bytes of a message, read out of the app's media cache
+const media = await tg.api.fetchMessageMedia(chatId, messageId);
+// media: [{ kind: 'photo', mimeType, fileName, sizeBytes, blob }] | []
+const video = await tg.api.fetchMessageMedia(chatId, messageId, { shouldPrefetchVideo: true });
 ```
 
 - `sendMessage` / `deleteMessages` skip (and log) chats that are not in the store.
 - `editMessage` works only in the currently open chat — the underlying app action edits whatever the open thread's editing state points at, so the facade points that state at `messageId` first; editing another chat is logged and skipped.
-- `setReaction` **toggles**: the same call sets the reaction when the current user has not reacted and removes it when they have.
+- `setReaction` **toggles**: the same call sets the reaction when the current user has not and removes it when they have.
+- `fetchMessageMedia` returns the message's media blobs that are already downloaded (photos, GIFs, stickers, documents, audio, voice). Call it **synchronously inside a `message:deleted` handler** — the returned promise must start while the message and its cached media are still alive, because the native delete pipeline unloads them a frame after the update dispatch. Plain video bytes download for real (while the file reference lives) only with `shouldPrefetchVideo`; without it, a video message resolves `[]`. Any failure resolves `[]` too — the call is contained, never throws. Apply your own size policy to the returned blobs (see `tg.storage.putBlob` for the budgeted write).
 
 ## `tg.store`
 
@@ -153,7 +196,11 @@ Read-only plain data — never store handles, so plugin code cannot mutate app s
 const activeChatId = tg.store.getActiveChatId();    // undefined when no chat is open
 const currentUserId = tg.store.getCurrentUserId(); // undefined when signed out
 const chat = tg.store.getChat('12345');            // Readonly<ApiChat>, or undefined
+const user = tg.store.getUser('12345');           // Readonly<ApiUser>, or undefined
+const message = tg.store.getMessage('12345', 678); // Readonly<ApiMessage>, or undefined
 ```
+
+`getMessage` reads the message store while the message is still in it — inside a `message:deleted` handler (which runs before the app's own reducers remove the message) it returns the soon-to-be-deleted message, letting a plugin snapshot content itself.
 
 ## `tg.util`
 
@@ -165,6 +212,46 @@ tg.util.getLocalizedString('SettingsPluginsAbout'); // keys resolve per the user
 
 - `log(...args)` prefixes every line with the plugin name; non-string args are JSON-serialized.
 - `getLocalizedString(key, variables?)` translates an app localization key. Valid keys are app keys — find them by their usage (`lang('SomeKey')` in components) or in `src/assets/localization/fallback.strings`; typing comes from `LangKey`. A failing translation logs and returns the raw key.
+
+## `tg.storage`
+
+Persistent storage scoped to the calling plugin and the signed-in account — records (small JSON) in IndexedDB, blobs (binary) in OPFS files, with a quota-aware budget. Any plugin can persist through it; the engine is a contract service, not plugin-private code.
+
+```ts
+// Records: unbudgeted, never evicted, survive restarts
+await tg.storage.putRecord('chat:100:msg5', { text: 'hello', capturedAt: 1737936000 });
+const record = await tg.storage.getRecord<{ text: string }>('chat:100:msg5');  // undefined when missing
+const page = await tg.storage.listRecords({ prefix: 'chat:100:' });           // { items, cursor? }
+const older = await tg.storage.listRecords({ prefix: 'chat:100:', cursor: page.cursor });
+await tg.storage.deleteRecord('chat:100:msg5');
+await tg.storage.clearRecords();                                              // clears ONLY this plugin's records
+
+// Blobs: budgeted, evicted oldest-captured-first
+const result = await tg.storage.putBlob('media:msg5', blob);
+// result: { isStored: true } | { isStored: false, reason: 'overCap' | 'overBudget' | 'unavailable' }
+const blob = await tg.storage.getBlob('media:msg5');                          // undefined when evicted
+await tg.storage.deleteBlob('media:msg5');
+await tg.storage.clearBlobs();                                               // clears ONLY this plugin's blobs
+
+const usage = await tg.storage.getUsage();  // { usedBytes, budgetBytes, quotaBytes }
+
+// Engine-wide config, reached through the slice (the settings UI of the plugin
+// that owns the budget/cap semantics calls these):
+await tg.storage.setBudgetBytes(12 * 1024 ** 3);      // the engine clamps to 50% of the quota
+await tg.storage.setPerBlobCapBytes(256 * 1024 ** 2);
+```
+
+Guarantees to design against:
+
+- **Scoping.** Keys are namespaced per plugin (`<pluginName>:<key>`) and the whole store is scoped per account slot; one plugin can never read another's data, and accounts never mix.
+- **Records are unbudgeted.** They are never evicted, and a failing eviction on the blob space never blocks a record write.
+- **Blobs are budgeted.** Total blob usage stays under `min(budget setting, 50% of the storage quota)`. Writing past it evicts the oldest captured blobs first (LRU); a blob that still does not fit resolves `{ isStored: false, reason: 'overBudget' }`.
+- **The per-blob cap decides blob-vs-record-only.** A blob above the cap resolves `{ isStored: false, reason: 'overCap' }` — store the archive record regardless; the flag is the signal, never a throw.
+- **`reason: 'unavailable'` means the environment lacks OPFS** (or the backend failed): blobs degrade to record-only semantics; records keep working.
+- **Error containment.** Every method logs failures with the plugin name and resolves a safe result — a missing engine answers reads with `undefined`/empty pages and writes with `{ isStored: false, reason: 'unavailable' }`.
+- **Data outlives enable/disable.** Disabling a plugin never drops its storage; re-enabling sees the same data. Only the explicit `delete*`/`clear*` methods remove it.
+
+Budget and per-blob cap settings live on the engine, not the plugin's record space (they are engine-wide). The settings UI of the plugin that owns their semantics reaches them through the slice: `tg.storage.setBudgetBytes` / `tg.storage.setPerBlobCapBytes` delegate to the runtime's engine handle and `tg.storage.getUsage()` reports the engine's accounting. The engine clamps the effective budget to 50% of the origin quota at runtime, so a settings panel additionally persists its user's chosen value in its own records (the anti-delete panel does, so the slider position survives reloads).
 
 ## Contract policy
 
@@ -182,6 +269,6 @@ Never break silently: a compile error in a plugin author's codebase is the last 
 
 - [`types.ts`](./types.ts) — the contract itself: every type, field and payload, with doc comments.
 - Settings → Plugins — the live list of what is loaded, with its toggle state.
-- The vitest suite under `src/plugins/` — pins the behavior: host lifecycle ([`host.test.ts`](./host.test.ts)), events ([`events.test.ts`](./events.test.ts)), the action facade ([`slices/api.test.ts`](./slices/api.test.ts)), store reads ([`slices/store.test.ts`](./slices/store.test.ts)), UI registries ([`slices/ui.test.ts`](./slices/ui.test.ts), [`registry.test.ts`](./registry.test.ts)) and utilities ([`slices/util.test.ts`](./slices/util.test.ts)).
+- The vitest suite under `src/plugins/` — pins the behavior: host lifecycle ([`host.test.ts`](./host.test.ts)), events ([`events.test.ts`](./events.test.ts)), the action facade ([`slices/api.test.ts`](./slices/api.test.ts)), store reads ([`slices/store.test.ts`](./slices/store.test.ts)), UI registries ([`slices/ui.test.ts`](./slices/ui.test.ts), [`registry.test.ts`](./registry.test.ts)), utilities ([`slices/util.test.ts`](./slices/util.test.ts)) and the storage engine ([`storageEngine.test.ts`](./storageEngine.test.ts), [`slices/storage.test.ts`](./slices/storage.test.ts)).
 
 If this README and [`types.ts`](./types.ts) disagree, `types.ts` wins and this README is the bug.

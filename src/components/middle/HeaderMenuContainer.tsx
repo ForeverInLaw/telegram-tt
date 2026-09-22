@@ -48,6 +48,7 @@ import {
 } from '../../global/selectors';
 import { isUserId } from '../../util/entities/ids';
 import { disableScrolling } from '../../util/scrollLock';
+import { getChatContextMenuItems } from '../../plugins/registry';
 import { buildAutoDeletePeriodOptions, DEFAULT_AUTO_DELETE_PERIODS } from '../common/helpers/autoDeletePeriods';
 
 import useAppLayout from '../../hooks/useAppLayout';
@@ -239,6 +240,9 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
   const lang = useLang();
 
   const { isMobile } = useAppLayout();
+  // Plugin-contributed items render after the native ones (like in the chat
+  // list menu); the registry is module-level state read fresh on every render.
+  const pluginChatMenuItems = getChatContextMenuItems();
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [shouldCloseFast, setShouldCloseFast] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -907,6 +911,26 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               >
                 {deleteTitle}
               </MenuItem>
+            </>
+          )}
+          {pluginChatMenuItems.length > 0 && chat && (
+            <>
+              <MenuSeparator />
+              {pluginChatMenuItems.map((item, index) => (
+                <MenuItem
+                  key={`plugin-chat-header-menu-${index}`}
+                  icon={item.icon}
+                  destructive={item.destructive}
+                  onClick={() => {
+                    // Saved Messages targets the dialog chat, like the native
+                    // actions in this menu (e.g. the delete modal below)
+                    item.onClick(savedDialog || chat);
+                    closeMenu();
+                  }}
+                >
+                  {item.label}
+                </MenuItem>
+              ))}
             </>
           )}
         </Menu>

@@ -16,7 +16,7 @@ function createFakeRuntime(enabledMap: Record<string, boolean> = {}) {
   const capturedErrors: CapturedError[] = [];
 
   const runtime: TgPluginRuntime = {
-    isPluginEnabled: (pluginName) => enabledMap[pluginName] !== false,
+    isPluginEnabled: (pluginName, isEnabledByDefault) => enabledMap[pluginName] ?? isEnabledByDefault,
     setPluginEnabled: (pluginName, isEnabled) => {
       enabledMap[pluginName] = isEnabled;
     },
@@ -36,7 +36,13 @@ function createFakeRuntime(enabledMap: Record<string, boolean> = {}) {
     getActiveChatId: () => undefined,
     getCurrentUserId: () => undefined,
     getChat: () => undefined,
+    getUser: () => undefined,
+    getCommonBoxChatId: () => undefined,
+    getMessage: () => undefined,
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key) => key,
+    getStorageEngine: () => Promise.reject(new Error('not exercised')),
+    getStorageEngineHandle: () => Promise.reject(new Error('not exercised')),
     createPluginReporter: (pluginName) => ({
       log: () => {},
       logError: (action, error) => {
@@ -220,11 +226,16 @@ describe('plugin host lifecycle', () => {
     )).toBe(true);
   });
 
-  it('keeps a disabled plugin disabled across re-initialization with a fresh runtime', () => {
+  it('keeps a default-off plugin off until it is enabled', () => {
     const enabledMap: Record<string, boolean> = {};
     initPlugins(createFakeRuntime(enabledMap).runtime);
 
-    expect(getPluginList().find((plugin) => plugin.name === 'hello-plugin')?.isEnabled).toBe(true);
+    // No stored flag and `isEnabledByDefault: false`: listed, never set up
+    expect(getPluginList().find((plugin) => plugin.name === 'hello-plugin')?.isEnabled).toBe(false);
+    expect(getMessageContextMenuItems().some((item) => item.label === 'Plugin demo')).toBe(false);
+
+    // `togglePlugin` closes over the runtime set by `initPlugins`.
+    togglePlugin('hello-plugin', true);
     expect(getMessageContextMenuItems().some((item) => item.label === 'Plugin demo')).toBe(true);
 
     // A re-init while the plugin is enabled tears the previous lifetime down
@@ -232,19 +243,15 @@ describe('plugin host lifecycle', () => {
     initPlugins(createFakeRuntime(enabledMap).runtime);
     expect(getMessageContextMenuItems().filter((item) => item.label === 'Plugin demo')).toHaveLength(1);
 
-    // `togglePlugin` closes over the runtime set by `initPlugins`.
-    togglePlugin('hello-plugin', false);
-    expect(getMessageContextMenuItems().some((item) => item.label === 'Plugin demo')).toBe(false);
-
     // A fresh runtime over the same storage simulates a page reload.
     initPlugins(createFakeRuntime(enabledMap).runtime);
-
-    expect(getPluginList().find((plugin) => plugin.name === 'hello-plugin')?.isEnabled).toBe(false);
-    expect(getMessageContextMenuItems().some((item) => item.label === 'Plugin demo')).toBe(false);
-
-    togglePlugin('hello-plugin', true);
     expect(getMessageContextMenuItems().some((item) => item.label === 'Plugin demo')).toBe(true);
     expect(getPluginList().find((plugin) => plugin.name === 'hello-plugin')?.isEnabled).toBe(true);
+
+    // Disabling persists across a re-init (and a simulated page reload)
+    togglePlugin('hello-plugin', false);
+    initPlugins(createFakeRuntime(enabledMap).runtime);
+    expect(getMessageContextMenuItems().some((item) => item.label === 'Plugin demo')).toBe(false);
   });
 
   it('lists the glob-loaded hello-plugin with its metadata', () => {
@@ -253,6 +260,6 @@ describe('plugin host lifecycle', () => {
     const helloPlugin = getPluginList().find((plugin) => plugin.name === 'hello-plugin');
     expect(helloPlugin?.version).toBe('0.2.0');
     expect(helloPlugin?.description).toBe('Runnable showcase of the plugin contract — see src/plugins/README.md.');
-    expect(helloPlugin?.isEnabled).toBe(true);
+    expect(helloPlugin?.isEnabled).toBe(false);
   });
 });

@@ -32,27 +32,36 @@ afterEach(() => {
 });
 
 describe('plugin runtime storage', () => {
-  it('treats plugins without a stored flag as enabled', () => {
-    expect(createTestRuntime().isPluginEnabled('hello-plugin')).toBe(true);
+  it('falls back to the manifest default when no flag is stored', () => {
+    expect(createTestRuntime().isPluginEnabled('hello-plugin', true)).toBe(true);
+    expect(createTestRuntime().isPluginEnabled('hello-plugin', false)).toBe(false);
   });
 
   it('keeps a stored disabled flag visible to fresh runtime instances', () => {
     createTestRuntime().setPluginEnabled('hello-plugin', false);
 
-    expect(createTestRuntime().isPluginEnabled('hello-plugin')).toBe(false);
+    expect(createTestRuntime().isPluginEnabled('hello-plugin', true)).toBe(false);
     expect(localStorage.getItem(STORAGE_KEY)).toBe('{"hello-plugin":false}');
   });
 
-  it('falls back to enabled when the stored payload is corrupt', () => {
+  it('falls back to the manifest default when the stored payload is corrupt', () => {
     localStorage.setItem(STORAGE_KEY, '{not json');
 
-    expect(createTestRuntime().isPluginEnabled('hello-plugin')).toBe(true);
+    expect(createTestRuntime().isPluginEnabled('hello-plugin', true)).toBe(true);
+    expect(createTestRuntime().isPluginEnabled('hello-plugin', false)).toBe(false);
   });
 
-  it('falls back to enabled when the stored payload is null', () => {
+  it('falls back to the manifest default when the stored payload is null', () => {
     localStorage.setItem(STORAGE_KEY, 'null');
 
-    expect(createTestRuntime().isPluginEnabled('hello-plugin')).toBe(true);
+    expect(createTestRuntime().isPluginEnabled('hello-plugin', true)).toBe(true);
+    expect(createTestRuntime().isPluginEnabled('hello-plugin', false)).toBe(false);
+  });
+
+  it('keeps an explicit enable stored for a default-off plugin', () => {
+    createTestRuntime().setPluginEnabled('hello-plugin', true);
+
+    expect(createTestRuntime().isPluginEnabled('hello-plugin', false)).toBe(true);
   });
 });
 

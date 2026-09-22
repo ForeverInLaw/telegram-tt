@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ApiMessage, ApiUpdate } from '../api/types';
 import type { PluginContext } from './context';
 import type { TgPluginRuntime } from './runtime';
-import type { TgChatOpenedPayload, TgPluginApi } from './types';
+import type { TgChatOpenedPayload, TgMessageDeletedPayload, TgPluginApi } from './types';
 
 import { buildTgApi } from './api';
 import { createPluginContext } from './context';
@@ -20,8 +20,11 @@ const TEST_PLUGIN_NAMES = ['alpha', 'beta'];
  * `emitApiUpdate` / `notifyStoreChange` drive the exact seams the production
  * runtime subscribes to (the `'apiUpdate'` action handler and the global
  * change callback), so this suite never imports src/global.
+ * `commonBoxChatIdsByMessageId` backs `getCommonBoxChatId`: the chat each
+ * common-box message id resolves to (mirroring the store resolution the
+ * production runtime inlines from `selectCommonBoxChatId`).
  */
-function createFakeRuntime(activeChatId?: string) {
+function createFakeRuntime(activeChatId?: string, commonBoxChatIdsByMessageId: Record<number, string> = {}) {
   const capturedErrors: CapturedError[] = [];
   const apiUpdateListeners = new Set<(update: ApiUpdate) => void>();
   const storeChangeListeners = new Set<() => void>();
@@ -55,7 +58,13 @@ function createFakeRuntime(activeChatId?: string) {
     getActiveMessageList: () => undefined,
     getCurrentUserId: () => undefined,
     getChat: () => undefined,
+    getUser: () => undefined,
+    getCommonBoxChatId: (messageId) => commonBoxChatIdsByMessageId[messageId],
+    getMessage: () => undefined,
+    fetchMessageMedia: () => Promise.resolve([]),
     getLocalizedString: (key) => key,
+    getStorageEngine: () => Promise.reject(new Error('not exercised')),
+    getStorageEngineHandle: () => Promise.reject(new Error('not exercised')),
     createPluginReporter: (pluginName) => ({
       log: () => {},
       logError: (action, error) => {
@@ -173,12 +182,12 @@ describe('plugin events: message events', () => {
     }]);
   });
 
-  it('delivers message:deleted with ids and the optional chatId from a deleteMessages update', () => {
-    const fake = createFakeRuntime();
+  it('delivers message:deleted with the enriched payload from a deleteMessages update', () => {
+    const fake = createFakeRuntime(undefined, { 7: '300', 8: '300', 9: '400' });
     initEventStreams(fake.runtime);
     const { tg } = createPluginLifetime('alpha', fake);
 
-    const received: { chatId: string | undefined; messageIds: number[] }[] = [];
+    const received: TgMessageDeletedPayload[] = [];
     tg.on('message:deleted', (payload) => {
       received.push(payload);
     });
@@ -187,8 +196,18 @@ describe('plugin events: message events', () => {
     fake.emitApiUpdate({ '@type': 'deleteMessages', ids: [1], chatId: '100' });
 
     expect(received).toEqual([
-      { chatId: undefined, messageIds: [7, 8, 9] },
-      { chatId: '100', messageIds: [1] },
+      {
+        source: 'delete',
+        items: [
+          { chatId: '300', messageId: 7, isLocal: false },
+          { chatId: '300', messageId: 8, isLocal: false },
+          { chatId: '400', messageId: 9, isLocal: false },
+        ],
+      },
+      {
+        source: 'delete',
+        items: [{ chatId: '100', messageId: 1, isLocal: false }],
+      },
     ]);
   });
 
@@ -222,6 +241,102 @@ describe('plugin events: message events', () => {
     });
 
     fake.emitApiUpdate({ '@type': 'deleteHistory', chatId: '100' });
+
+    expect(deliveries).toBe(0);
+  });
+});
+
+describe('plugin events: message:deleted enrichment', () => {
+  it('classifies updates without a source as plain deletes and resolves each chat', () => {
+    const fake = createFakeRuntime();
+    initEventStreams(fake.runtime);
+    const { tg } = createPluginLifetime('alpha', fake);
+
+    const received: TgMessageDeletedPayload[] = [];
+    tg.on('message:deleted', (payload) => {
+      received.push(payload);
+    });
+
+    fake.emitApiUpdate({ '@type': 'deleteMessages', ids: [11, 12], chatId: '100' });
+
+    expect(received).toEqual([{
+      source: 'delete',
+      items: [
+        { chatId: '100', messageId: 11, isLocal: false },
+        { chatId: '100', messageId: 12, isLocal: false },
+      ],
+    }]);
+  });
+
+  it('resolves common-box deletions per id through the runtime', () => {
+    const fake = createFakeRuntime(undefined, { 21: '300', 22: '400' });
+    initEventStreams(fake.runtime);
+    const { tg } = createPluginLifetime('alpha', fake);
+
+    const received: TgMessageDeletedPayload[] = [];
+    tg.on('message:deleted', (payload) => {
+      received.push(payload);
+    });
+
+    // No `chatId` on the update: each id resolves to its own chat
+    fake.emitApiUpdate({ '@type': 'deleteMessages', ids: [21, 22, 23] });
+
+    expect(received).toEqual([{
+      source: 'delete',
+      items: [
+        { chatId: '300', messageId: 21, isLocal: false },
+        { chatId: '400', messageId: 22, isLocal: false },
+        // An id the store knows nothing about keeps `chatId: undefined`
+        { chatId: undefined, messageId: 23, isLocal: false },
+      ],
+    }]);
+  });
+
+  it('passes the locally-initiated marking through to every item', () => {
+    const fake = createFakeRuntime();
+    initEventStreams(fake.runtime);
+    const { tg } = createPluginLifetime('alpha', fake);
+
+    const received: TgMessageDeletedPayload[] = [];
+    tg.on('message:deleted', (payload) => {
+      received.push(payload);
+    });
+
+    fake.emitApiUpdate({ '@type': 'deleteMessages', ids: [31], chatId: '100', isLocal: true });
+
+    expect(received).toEqual([{
+      source: 'delete',
+      items: [{ chatId: '100', messageId: 31, isLocal: true }],
+    }]);
+  });
+
+  it('classifies ttl and historyClear deletions', () => {
+    const fake = createFakeRuntime();
+    initEventStreams(fake.runtime);
+    const { tg } = createPluginLifetime('alpha', fake);
+
+    const received: TgMessageDeletedPayload[] = [];
+    tg.on('message:deleted', (payload) => {
+      received.push(payload);
+    });
+
+    fake.emitApiUpdate({ '@type': 'deleteMessages', ids: [41], chatId: '100', source: 'ttl' });
+    fake.emitApiUpdate({ '@type': 'deleteMessages', ids: [42], chatId: '100', source: 'historyClear' });
+
+    expect(received.map((payload) => payload.source)).toEqual(['ttl', 'historyClear']);
+  });
+
+  it('emits no message:deleted for scheduled-message cancellation', () => {
+    const fake = createFakeRuntime();
+    initEventStreams(fake.runtime);
+    const { tg } = createPluginLifetime('alpha', fake);
+
+    let deliveries = 0;
+    tg.on('message:deleted', () => {
+      deliveries += 1;
+    });
+
+    fake.emitApiUpdate({ '@type': 'deleteScheduledMessages', ids: [51], chatId: '100' });
 
     expect(deliveries).toBe(0);
   });
