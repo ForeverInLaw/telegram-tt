@@ -985,6 +985,7 @@
 "MessageMetaEditedOnDateAtTime" = "edited on {date} at {time}";
 "MessageMetaApproximate" = "approx.";
 "MessageMetaImported" = "imported";
+"MessageArchivedDeleted" = "deleted";
 "ImportedInfo" = "This message was imported from another app. We can't guarantee it's real.";
 "ScheduledMessagesEmptyPlaceholder" = "No scheduled messages here yet...";
 "ConversationCloudStorageInfoTitle" = "Your Cloud Storage";

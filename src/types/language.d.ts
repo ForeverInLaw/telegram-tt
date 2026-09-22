@@ -814,6 +814,7 @@ export interface LangPair {
   'MessageMetaEdited': undefined;
   'MessageMetaApproximate': undefined;
   'MessageMetaImported': undefined;
+  'MessageArchivedDeleted': undefined;
   'ImportedInfo': undefined;
   'ScheduledMessagesEmptyPlaceholder': undefined;
   'ConversationCloudStorageInfoTitle': undefined;
