@@ -530,6 +530,9 @@
 "DeletedMessagesLoading" = "Loading…";
 "DeletedMessagesCopied" = "Copied";
 "DeletedMessagesMediaPlaceholder" = "Media";
+"DeletedMessagesEditHistory" = "Edit history";
+"DeletedMessagesEditHistoryCount" = "{count} edits";
+"DeletedMessagesEditHistoryRevision" = "Before edit";
 "PrivacyPhone" = "Phone Number";
 "PrivacyLastSeen" = "Last Seen & Online";
 "PrivacyProfilePhoto" = "Profile Photo";
