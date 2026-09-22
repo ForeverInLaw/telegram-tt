@@ -1,8 +1,9 @@
 import {
-  memo, useState,
+  memo, useEffect, useState,
 } from '../../../lib/teact/teact';
 
 import { getPluginList, togglePlugin } from '../../../plugins/host';
+import { getSettingsPanels, subscribeToSettingsPanels } from '../../../plugins/registry';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
@@ -24,6 +25,13 @@ type OwnProps = {
 const SettingsPlugins = ({ isActive, onReset }: OwnProps) => {
   // The host returns stable references, so local state drives re-renders.
   const [pluginList, setPluginList] = useState(() => getPluginList());
+  // Registered panels change when plugins toggle; the registry notifies, and
+  // the stable-reference array keeps identity-driven re-renders cheap.
+  const [, setPanelVersion] = useState(0);
+
+  useEffect(() => subscribeToSettingsPanels(() => {
+    setPanelVersion((version) => version + 1);
+  }), []);
 
   const lang = useLang();
 
@@ -36,6 +44,8 @@ const SettingsPlugins = ({ isActive, onReset }: OwnProps) => {
     togglePlugin(pluginName, isEnabled);
     setPluginList(getPluginList());
   });
+
+  const settingsPanels = getSettingsPanels();
 
   return (
     <div className="settings-content custom-scroll">
@@ -60,6 +70,13 @@ const SettingsPlugins = ({ isActive, onReset }: OwnProps) => {
           </ListItem>
         ))}
       </Island>
+      {settingsPanels.length > 0 && (
+        <Island>
+          {settingsPanels.map((panel, index) => (
+            <div key={`plugin-settings-panel-${index}`}>{panel.render()}</div>
+          ))}
+        </Island>
+      )}
     </div>
   );
 };

@@ -2,6 +2,33 @@ import type { ApiChat, ApiMessage, ApiUser } from '../api/types';
 import type { ThreadId } from '../types';
 import type { IconName } from '../types/icons';
 import type { LangKey, LangVariable } from '../types/language';
+import type { TeactNode } from '../lib/teact/teact';
+
+/** A node factory plugins pass to `tg.ui` render surfaces; re-exported here so plugin code stays within the import policy. */
+export type TgTeactNode = TeactNode;
+
+/**
+ * A full screen a plugin opens through `tg.ui.openScreen`. The app renders the
+ * node produced by `render` inside its own overlay container with a header
+ * (title, back button); the plugin never touches UI primitives.
+ */
+export interface TgPluginScreen {
+  /** Header title; a plain string, already localized by the plugin. */
+  title: string;
+  /** Node factory the container calls to render the screen body; a fresh node per render. */
+  render: () => TgTeactNode;
+  /** Called when the screen closes (back button, container unmount, plugin disable). */
+  onClose?: () => void;
+}
+
+/**
+ * One panel section a plugin contributes to the Settings → Plugins screen,
+ * rendered under the plugin list. One panel per registration.
+ */
+export interface TgSettingsPanel {
+  /** Renders the panel content; a fresh node per render. */
+  render: () => TgTeactNode;
+}
 
 /**
  * Declarative descriptor for a context-menu item contributed by a plugin.
@@ -36,6 +63,18 @@ export interface TgPluginApi {
     addComposerButton: (item: TgComposerButton) => void;
     /** Show an in-app notification with title and body. */
     showNotification: (notification: TgUiNotification) => void;
+    /**
+     * Opens the plugin's full screen in the app's own overlay container
+     * (header with the title, back navigation). Returns a close function;
+     * closing also fires the screen's `onClose`. Opening another screen
+     * replaces the current one; disabling the plugin closes its open screen.
+     */
+    openScreen: (screen: TgPluginScreen) => () => void;
+    /**
+     * Contributes one panel section to the Settings → Plugins screen, rendered
+     * under the plugin list. Cleared when the plugin is disabled.
+     */
+    registerSettingsPanel: (panel: TgSettingsPanel) => void;
   };
   /**
    * Subscribe to an app event and receive its typed payload; returns the

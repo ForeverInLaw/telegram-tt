@@ -6,7 +6,9 @@ import type { TgPluginReporter, TgPluginRuntime } from '../runtime';
 
 import { createPluginContext } from '../context';
 import {
-  getChatContextMenuItems, getComposerButtons, getMainMenuItems, getMessageContextMenuItems,
+  clearSettingsPanels, closePluginScreen, getActivePluginScreen, getChatContextMenuItems,
+  getComposerButtons, getMainMenuItems, getMessageContextMenuItems, getSettingsPanels,
+  subscribeToPluginScreen,
 } from '../registry';
 import { createUiSlice } from './ui';
 
@@ -40,9 +42,9 @@ function createTestUiSlice(pluginName: string) {
   const runtime: TgPluginRuntime = {
     isPluginEnabled: () => true,
     setPluginEnabled: () => {},
-    createPluginReporter: () => {
-      throw new Error('the ui slice never creates a reporter');
-    },
+    // Render-factory containment (openScreen, settings panels) needs the
+    // reporter directly, so the slice DOES create one per plugin.
+    createPluginReporter: () => reporter,
     subscribeApiUpdates: () => () => {},
     subscribeToStoreChanges: () => {},
     getActions: () => {
@@ -234,5 +236,145 @@ describe('ui slice', () => {
 
     expect(getMainMenuItems().map((item) => item.label)).toEqual(['Item B']);
     sliceB.context.runTeardowns();
+  });
+
+  it('opens the screen with a wrapped render and onClose, and the close fn closes it', () => {
+    const { context, ui } = createTestUiSlice(TEST_PLUGIN_NAME);
+    activeContext = context;
+    const pluginRender = vi.fn(() => 'plugin-node' as never);
+    const pluginOnClose = vi.fn();
+
+    const closeScreen = ui.openScreen({ title: 'Plugin screen', render: pluginRender, onClose: pluginOnClose });
+
+    const active = getActivePluginScreen();
+    expect(active?.pluginName).toBe(TEST_PLUGIN_NAME);
+    expect(active?.screen.title).toBe('Plugin screen');
+
+    // The registration wraps the plugin's factory, so the container never calls plugin code directly
+    expect(active?.screen.render).not.toBe(pluginRender);
+    expect(pluginRender).not.toHaveBeenCalled();
+
+    // Rendering through the descriptor reaches the plugin factory
+    expect(active?.screen.render()).toBe('plugin-node');
+    expect(pluginRender).toHaveBeenCalledTimes(1);
+
+    closeScreen();
+
+    expect(getActivePluginScreen()).toBeUndefined();
+    expect(pluginOnClose).toHaveBeenCalledTimes(1);
+
+    // The close fn is idempotent: a second call finds no screen of this plugin
+    closeScreen();
+    expect(pluginOnClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies screen subscribers through the slice registration', () => {
+    const { context, ui } = createTestUiSlice(TEST_PLUGIN_NAME);
+    activeContext = context;
+    const listener = vi.fn();
+    const unsubscribe = subscribeToPluginScreen(listener);
+
+    ui.openScreen({ title: 'Notify screen', render: () => undefined });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+  });
+
+  it('wraps a throwing render factory and renders an empty node instead', () => {
+    const { context, ui, capturedErrors } = createTestUiSlice(TEST_PLUGIN_NAME);
+    activeContext = context;
+
+    ui.openScreen({
+      title: 'Broken screen',
+      render: () => {
+        throw new Error('render boom');
+      },
+    });
+
+    const active = getActivePluginScreen();
+    expect(() => active?.screen.render()).not.toThrow();
+    expect(active?.screen.render()).toBeUndefined();
+    expect(capturedErrors.some(({ action, error }) => (
+      action === 'screen render failed' && (error as Error).message === 'render boom'
+    ))).toBe(true);
+  });
+
+  it('replaces an open screen, firing the previous screen onClose', () => {
+    const { context, ui } = createTestUiSlice(TEST_PLUGIN_NAME);
+    activeContext = context;
+    const firstOnClose = vi.fn();
+    const secondOnClose = vi.fn();
+
+    ui.openScreen({ title: 'First', render: () => undefined, onClose: firstOnClose });
+    ui.openScreen({ title: 'Second', render: () => undefined, onClose: secondOnClose });
+
+    expect(getActivePluginScreen()?.screen.title).toBe('Second');
+    // Replacing fired the first screen's wrapped onClose
+    expect(firstOnClose).toHaveBeenCalledTimes(1);
+    expect(secondOnClose).not.toHaveBeenCalled();
+
+    // The close fn is keyed by plugin: it closes the plugin's CURRENT screen
+    const closeSecond = () => closePluginScreen(TEST_PLUGIN_NAME);
+    closeSecond();
+
+    expect(getActivePluginScreen()).toBeUndefined();
+    expect(secondOnClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the open screen and fires its wrapped onClose on teardown', () => {
+    const { context, ui } = createTestUiSlice(TEST_PLUGIN_NAME);
+    const pluginOnClose = vi.fn();
+
+    ui.openScreen({ title: 'Teardown screen', render: () => undefined, onClose: pluginOnClose });
+    context.runTeardowns();
+
+    expect(getActivePluginScreen()).toBeUndefined();
+    expect(pluginOnClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers a settings panel with a wrapped render and clears it on teardown', () => {
+    const { context, ui } = createTestUiSlice(TEST_PLUGIN_NAME);
+    activeContext = context;
+    const pluginRender = vi.fn(() => 'panel-node' as never);
+
+    ui.registerSettingsPanel({ render: pluginRender });
+
+    const panels = getSettingsPanels();
+    expect(panels).toHaveLength(1);
+    expect(panels[0].render).not.toBe(pluginRender);
+    expect(panels[0].render()).toBe('panel-node');
+    expect(pluginRender).toHaveBeenCalledTimes(1);
+
+    context.runTeardowns();
+
+    expect(getSettingsPanels()).toHaveLength(0);
+    clearSettingsPanels(TEST_PLUGIN_NAME);
+  });
+
+  it('renders the viewer registration through the openScreen seam', () => {
+    const { context, ui } = createTestUiSlice(TEST_PLUGIN_NAME);
+    activeContext = context;
+
+    // The anti-delete viewer registers exactly this way: a chat context-menu
+    // item whose click opens the screen with a node factory.
+    ui.addChatContextMenuItem({
+      label: 'Deleted messages',
+      onClick: (chat) => {
+        ui.openScreen({
+          title: 'Deleted messages',
+          render: () => 'viewer-node' as never,
+        });
+      },
+    });
+
+    const menuItem = getChatContextMenuItems()[0];
+    menuItem.onClick({ id: 'chat-42' } as ApiChat);
+
+    const active = getActivePluginScreen();
+    expect(active?.screen.title).toBe('Deleted messages');
+    expect(active?.screen.render()).toBe('viewer-node');
+
+    closePluginScreen(TEST_PLUGIN_NAME);
   });
 });

@@ -1,5 +1,6 @@
 import type {
   TgChatContextMenuItem, TgComposerButton, TgMainMenuItem, TgMessageContextMenuItem,
+  TgPluginScreen, TgSettingsPanel,
 } from './types';
 
 /**
@@ -50,6 +51,12 @@ const messageContextMenuRegistry = createSurfaceRegistry<TgMessageContextMenuIte
 const chatContextMenuRegistry = createSurfaceRegistry<TgChatContextMenuItem>();
 const mainMenuRegistry = createSurfaceRegistry<TgMainMenuItem>();
 const composerButtonRegistry = createSurfaceRegistry<TgComposerButton>();
+const settingsPanelRegistry = createSurfaceRegistry<TgSettingsPanel>();
+
+// Settings screens re-render on every toggle already (they read the host
+// list), but a plugin registered mid-session must appear without one; a tiny
+// notification set lets SettingsPlugins subscribe like the screen container.
+const settingsPanelListeners = new Set<() => void>();
 
 // Kept exported one-by-one so native seams import a named getter per surface.
 
@@ -101,4 +108,100 @@ export function clearComposerButtons(pluginName: string) {
 
 export function getComposerButtons(): readonly TgComposerButton[] {
   return composerButtonRegistry.getAll();
+}
+
+export function registerSettingsPanel(pluginName: string, panel: TgSettingsPanel) {
+  settingsPanelRegistry.register(pluginName, panel);
+  notifySettingsPanelsChanged();
+}
+
+export function clearSettingsPanels(pluginName: string) {
+  // The reference stays stable when the plugin had no panels; no notification either.
+  const panelsBefore = settingsPanelRegistry.getAll();
+  settingsPanelRegistry.clearByPlugin(pluginName);
+  if (settingsPanelRegistry.getAll() !== panelsBefore) {
+    notifySettingsPanelsChanged();
+  }
+}
+
+export function getSettingsPanels(): readonly TgSettingsPanel[] {
+  return settingsPanelRegistry.getAll();
+}
+
+/** Subscribes to settings-panel registration changes; returns the unsubscribe function. */
+export function subscribeToSettingsPanels(listener: () => void): () => void {
+  settingsPanelListeners.add(listener);
+  return () => {
+    settingsPanelListeners.delete(listener);
+  };
+}
+
+function notifySettingsPanelsChanged() {
+  for (const listener of settingsPanelListeners) {
+    listener();
+  }
+}
+
+// --- Active plugin screen ---------------------------------------------------
+//
+// A singleton, not a list surface: `openScreen` replaces whatever screen is
+// open, so the app renders at most one plugin screen at a time. The container
+// subscribes through `subscribeToPluginScreen` and re-renders on every change.
+
+/** The open screen plus its owning plugin; `undefined` while no screen is open. */
+type ActivePluginScreen = { pluginName: string; screen: TgPluginScreen };
+
+let activePluginScreen: ActivePluginScreen | undefined;
+let pluginScreenVersion = 0;
+
+const pluginScreenListeners = new Set<() => void>();
+
+/** Opens a plugin screen, replacing the currently open one (firing its `onClose` first). */
+export function openPluginScreen(pluginName: string, screen: TgPluginScreen) {
+  activePluginScreen?.screen.onClose?.();
+  activePluginScreen = { pluginName, screen };
+  notifyPluginScreenChanged();
+}
+
+/** Closes the open screen when it belongs to `pluginName`; a no-op otherwise. */
+export function closePluginScreen(pluginName: string) {
+  if (activePluginScreen?.pluginName !== pluginName) return;
+
+  activePluginScreen.screen.onClose?.();
+  activePluginScreen = undefined;
+  notifyPluginScreenChanged();
+}
+
+/** Closes any open screen; used by the app's own back navigation. */
+export function closeActivePluginScreen() {
+  if (activePluginScreen === undefined) return;
+
+  activePluginScreen.screen.onClose?.();
+  activePluginScreen = undefined;
+  notifyPluginScreenChanged();
+}
+
+/** Returns the open screen entry; `undefined` while no screen is open. */
+export function getActivePluginScreen(): ActivePluginScreen | undefined {
+  return activePluginScreen;
+}
+
+/** Returns the screen-state version, bumped on every open/close; lets containers skip redundant work. */
+export function getPluginScreenVersion(): number {
+  return pluginScreenVersion;
+}
+
+/** Subscribes to screen open/close changes; returns the unsubscribe function. */
+export function subscribeToPluginScreen(listener: () => void): () => void {
+  pluginScreenListeners.add(listener);
+  return () => {
+    pluginScreenListeners.delete(listener);
+  };
+}
+
+function notifyPluginScreenChanged() {
+  pluginScreenVersion += 1;
+  for (const listener of pluginScreenListeners) {
+    listener();
+  }
 }
