@@ -943,6 +943,8 @@ addActionHandler('cancelUploadMedia', (global, actions, payload): ActionReturnTy
       '@type': 'deleteMessages',
       ids: [messageId],
       chatId,
+      // Marked locally-initiated so the plugin layer can exclude the client's own deletions
+      isLocal: true,
     });
   }
 });
@@ -2132,7 +2134,15 @@ function cleanupExpiredMessagesForChat(actions: RequiredGlobalActions, chatId: s
   });
 
   if (expiredIds.length) {
-    deleteMessages(global, chatId, expiredIds, actions);
+    // Dispatched through the apiUpdate handler (which funnels back into the
+    // shared `deleteMessages` updater) so the deletion carries `source: 'ttl'`
+    // for the plugin layer; calling the updater directly would strip it.
+    actions.apiUpdate({
+      '@type': 'deleteMessages',
+      ids: expiredIds,
+      chatId,
+      source: 'ttl',
+    });
   }
 
   const current = ttlCleanupTimersByChatId.get(chatId);

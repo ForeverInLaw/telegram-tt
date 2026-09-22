@@ -966,8 +966,15 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
       if (chatMessages) {
         const ids = Object.keys(chatMessages.byId).map(Number);
-        global = getGlobal();
-        deleteMessages(global, chatId, ids, actions);
+        // Dispatched through the apiUpdate handler (which funnels back into the
+        // shared `deleteMessages` updater) so the deletion carries
+        // `source: 'historyClear'` for the plugin layer.
+        actions.apiUpdate({
+          '@type': 'deleteMessages',
+          ids,
+          chatId,
+          source: 'historyClear',
+        });
       } else {
         actions.requestChatUpdate({ chatId });
       }
@@ -1532,7 +1539,15 @@ export function deleteParticipantHistory<T extends GlobalState>(
     return;
   }
 
-  deleteMessages(global, chatId, messageIds, actions);
+  // Dispatched through the apiUpdate handler (which funnels back into the
+  // shared `deleteMessages` updater) so the deletion carries `source` and the
+  // plugin layer sees the purge; calling the updater directly would bypass it.
+  actions.apiUpdate({
+    '@type': 'deleteMessages',
+    ids: messageIds,
+    chatId,
+    source: 'delete',
+  });
 }
 
 export function deleteThread<T extends GlobalState>(
